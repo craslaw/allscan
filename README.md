@@ -1,0 +1,2 @@
+# allscan
+Declarative security scanning
