@@ -193,6 +193,7 @@ func printDryRun(config *Config) {
 	}
 }
 
+// Create workspace and results directories
 func setupDirectories(config *Config) error {
 	dirs := []string{
 		config.Global.Workspace,
@@ -296,7 +297,26 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	// Create output path
 	timestamp := time.Now().Format("20060102-150405")
 	outputFilename := fmt.Sprintf("%s_%s_%s.json", repoName, scanner.Name, timestamp)
-	outputPath := filepath.Join(config.Global.ResultsDir, outputFilename)
+
+	// Convert to absolute path
+	resultsDir, err := filepath.Abs(config.Global.ResultsDir)
+	if err != nil {
+		resultsDir = config.Global.ResultsDir
+	}
+	outputPath := filepath.Join(resultsDir, outputFilename)
+
+	// Ensure output directory exists (create if needed)
+	if err := os.MkdirAll(resultsDir, 0755); err != nil {
+		log.Printf("    ❌ Failed to create results directory %s: %v", resultsDir, err)
+		return ScanResult{
+			Scanner:    scanner.Name,
+			Repository: repo.URL,
+			OutputPath: outputPath,
+			Success:    false,
+			Error:      fmt.Errorf("creating results directory: %w", err),
+			Duration:   time.Since(start),
+		}
+	}
 
 	log.Printf("  🔎 Running %s...", scanner.Name)
 
