@@ -22,7 +22,7 @@
           pname = "vuln-scanner-orchestrator";
           version = "1.0.0";
           src = ./.;
-          vendorHash = null;
+          vendorHash = "sha256-g+yaVIx4jxpAQ/+WrGKxhVeliYx7nLQe/zsGpxV4Fn4=";
           
           # Make scanners available at build time
           nativeBuildInputs = scanners;

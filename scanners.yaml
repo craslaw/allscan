@@ -1,0 +1,100 @@
+# scanners.yaml
+# Configuration for vulnerability scanners
+
+# Global settings
+global:
+  # Where to clone repos for scanning
+  workspace: "/tmp/scanner-workspace"
+  
+  # Where to store scan results
+  results_dir: "./scan-results"
+  
+  # Vulnerability management system endpoint
+  upload_endpoint: "https://your-vuln-mgmt.example.com/api/v1/scans"
+  
+  # Maximum concurrent scans
+  max_concurrent: 3
+  
+  # Continue on error or fail fast
+  fail_fast: false
+
+# List of scanners to run
+scanners:
+  - name: "gosec"
+    enabled: true
+    command: "gosec"
+    args:
+      - "-fmt=json"
+      - "-out={{output}}"
+      - "./..."
+    # Only run on Go repositories
+    file_patterns:
+      - "**/*.go"
+      - "go.mod"
+    timeout: "5m"
+    
+  - name: "semgrep"
+    enabled: false
+    command: "semgrep"
+    args:
+      - "scan"
+      - "--config=auto"
+      - "--json"
+      - "--output={{output}}"
+    file_patterns:
+      - "**/*.py"
+      - "**/*.js"
+      - "**/*.go"
+      - "**/*.java"
+    timeout: "10m"
+    
+  - name: "trivy"
+    enabled: false
+    command: "trivy"
+    args:
+      - "fs"
+      - "--format=json"
+      - "--output={{output}}"
+      - "."
+    # Run on all repos
+    file_patterns: []
+    timeout: "5m"
+    
+  - name: "gitleaks"
+    enabled: true
+    command: "gitleaks"
+    args:
+      - "detect"
+      - "--source=."
+      - "--report-format=json"
+      - "--report-path={{output}}"
+      - "--no-git"
+    file_patterns: []
+    timeout: "3m"
+    
+  - name: "golangci-lint"
+    enabled: false  # Disabled by default
+    command: "golangci-lint"
+    args:
+      - "run"
+      - "--out-format=json"
+      - "--issues-exit-code=0"
+    file_patterns:
+      - "**/*.go"
+      - "go.mod"
+    timeout: "10m"
+
+# List of repositories to scan
+repositories:
+  - url: "https://github.com/your-org/repo1"
+    branch: "main"
+    # Override global settings for this repo
+    scanners:
+      - "gosec"
+      - "gitleaks"
+  
+  - url: "https://github.com/your-org/repo2"
+    branch: "develop"
+    # Use all enabled scanners
+    scanners: []
+  
