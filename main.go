@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"mime/multipart"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -423,13 +427,156 @@ func printSummary(results []ScanResult) {
 func uploadResults(config *Config, results []ScanResult) {
 	log.Printf("\n📤 Uploading results to %s", config.Global.UploadEndpoint)
 
+	// Get authorization token from environment
+	authToken := os.Getenv("VULN_MGMT_API_TOKEN")
+	if authToken == "" {
+		log.Printf("⚠️  VULN_MGMT_API_TOKEN not set, skipping upload")
+		return
+	}
+
+	successCount := 0
+	failCount := 0
+
 	for _, result := range results {
 		if !result.Success {
+			log.Printf("  ⏭️  Skipping %s (scan failed)", result.OutputPath)
 			continue
 		}
 
 		// TODO: Implement actual upload logic
 		// For now, just log what would be uploaded
-		log.Printf("  Would upload: %s", result.OutputPath)
+		log.Printf("Uploading: %s", result.OutputPath)
+		if err := uploadSingleResult(config, result, authToken); err != nil {
+			log.Printf("  ❌ Failed to upload %s: %v", result.OutputPath, err)
+			failCount++
+		} else {
+			log.Printf("  ✅ Uploaded %s", result.OutputPath)
+			successCount++
+		}
 	}
+
+	log.Printf("\n📊 Upload Summary: %d successful, %d failed", successCount, failCount)
+}
+
+func uploadSingleResult(config *Config, result ScanResult, authToken string) error {
+	// Open the scan result file
+	file, err := os.Open(result.OutputPath)
+	if err != nil {
+		return fmt.Errorf("opening file: %w", err)
+	}
+	defer file.Close()
+
+	// Create multipart form data
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// Add form fields
+	scanDate := time.Now().Format("2006-01-02")
+	if err := writer.WriteField("scan_date", scanDate); err != nil {
+		return fmt.Errorf("writing scan_date field: %w", err)
+	}
+
+	// Extract product name from repository URL
+	productName := extractProductName(result.Repository)
+	if err := writer.WriteField("product_name", productName); err != nil {
+		return fmt.Errorf("writing product_name field: %w", err)
+	}
+
+	// Use scanner name as engagement name
+	engagementName := fmt.Sprintf("%s-%s", productName, result.Scanner)
+	if err := writer.WriteField("engagement_name", engagementName); err != nil {
+		return fmt.Errorf("writing engagement_name field: %w", err)
+	}
+
+	// Map scanner name to scan type
+	scanType := mapScannerToScanType(result.Scanner)
+	if err := writer.WriteField("scan_type", scanType); err != nil {
+		return fmt.Errorf("writing scan_type field: %w", err)
+	}
+
+	// Enable auto_create_context to make new products/engagements
+	autoCreateContext := "true"
+	if err := writer.WriteField("auto_create_context", autoCreateContext); err != nil {
+		return fmt.Errorf("writing auto_create_context field: %w", err)
+	}
+
+	productType := "Research and Development"
+	if err := writer.WriteField("product_type_name", productType); err != nil {
+		return fmt.Errorf("writing product_type_name field: %w", err)
+	}
+
+	// Add the file
+	part, err := writer.CreateFormFile("file", filepath.Base(result.OutputPath))
+	if err != nil {
+		return fmt.Errorf("creating form file: %w", err)
+	}
+
+	if _, err := io.Copy(part, file); err != nil {
+		return fmt.Errorf("copying file data: %w", err)
+	}
+
+	// Close the multipart writer to finalize the form data
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("closing writer: %w", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", config.Global.UploadEndpoint, body)
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Authorization", fmt.Sprintf("Token %s", authToken))
+
+	// Send request with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("sending request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+// extractProductName extracts a clean product name from repository URL
+func extractProductName(repoURL string) string {
+	// Example: https://github.com/your-org/my-repo -> my-repo
+	parts := strings.Split(repoURL, "/")
+	if len(parts) > 0 {
+		repoName := parts[len(parts)-2] + "/" + parts[len(parts)-1]
+		repoName = strings.TrimSuffix(repoName, ".git")
+		return repoName
+	}
+	return "unknown"
+}
+
+// mapScannerToScanType maps scanner names to vulnerability management scan types
+func mapScannerToScanType(scannerName string) string {
+	// Map scanner names to common scan type names
+	// Adjust these based on your vulnerability management system's scan types
+	mapping := map[string]string{
+		"gosec":         "Gosec Scanner",
+		"semgrep":       "Semgrep Scan",
+		"gitleaks":      "Gitleaks Scan",
+		"golangci-lint": "Golangci-lint",
+	}
+
+	if scanType, ok := mapping[scannerName]; ok {
+		return scanType
+	}
+
+	// Default: capitalize scanner name
+	return strings.Title(scannerName) + " Scan"
 }
