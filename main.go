@@ -104,20 +104,6 @@ func main() {
 	}
 }
 
-//	// Test that scanners are available
-//	scanners := []string{"gosec", "gitleaks"}
-//
-//	for _, scanner := range scanners {
-//		cmd := exec.Command(scanner, "--version")
-//		output, err := cmd.CombinedOutput()
-//		if err != nil {
-//			fmt.Printf("❌ %s: not found\n", scanner)
-//		} else {
-//			fmt.Printf("✅ %s: %s\n", scanner, string(output))
-//		}
-//	}
-//}
-
 func loadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
