@@ -3,7 +3,8 @@ Declarative security scanning
 
 # Use
 1. `nix develop`
-2. `nix run`
+2. `export VULN_MGMT_API_TOKEN="your-defectdojo-token"`
+3. `nix run`
 
 # Updating
 ## Updating Scanners
