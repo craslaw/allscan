@@ -429,8 +429,6 @@ func uploadResults(config *Config, results []ScanResult) {
 			continue
 		}
 
-		// TODO: Implement actual upload logic
-		// For now, just log what would be uploaded
 		log.Printf("Uploading: %s", result.OutputPath)
 		if err := uploadSingleResult(config, result, authToken); err != nil {
 			log.Printf("  ❌ Failed to upload %s: %v", result.OutputPath, err)
