@@ -429,7 +429,6 @@ func uploadResults(config *Config, results []ScanResult) {
 			continue
 		}
 
-		log.Printf("Uploading: %s", result.OutputPath)
 		if err := uploadSingleResult(config, result, authToken); err != nil {
 			log.Printf("  ❌ Failed to upload %s: %v", result.OutputPath, err)
 			failCount++
@@ -442,6 +441,14 @@ func uploadResults(config *Config, results []ScanResult) {
 	log.Printf("\n📊 Upload Summary: %d successful, %d failed", successCount, failCount)
 }
 
+// Create a new scan upload request builder with sensible defaults
+func BuildUploadRequest() *UploadRequestBuilder {
+	return &UploadRequestBuilder{
+		fields:  make(map[string]string),
+		timeout: 30 * time.Second,
+	}
+}
+
 func uploadSingleResult(config *Config, result ScanResult, authToken string) error {
 	// Open the scan result file
 	file, err := os.Open(result.OutputPath)
@@ -450,73 +457,127 @@ func uploadSingleResult(config *Config, result ScanResult, authToken string) err
 	}
 	defer file.Close()
 
+	fields := map[string]string{
+		"scan_date":           time.Now().Format("2006-01-02"),
+		"product_name":        extractProductName(result.Repository),
+		"engagement_name":     fmt.Sprintf("%s-%s", extractProductName(result.Repository), result.Scanner),
+		"scan_type":           mapScannerToScanType(result.Scanner),
+		"auto_create_context": "true",
+		"product_type_name":   "Research and Development",
+		"do_not_reactivate":   "true",
+	}
+
+	// Build upload request using the Fluent Builder pattern
+	builder := BuildUploadRequest().
+		WithFile(file, filepath.Base(result.OutputPath)).
+		WithAuthToken(authToken).
+		WithEndpoint(config.Global.UploadEndpoint).
+		AddFields(fields)
+	return builder.Send()
+}
+
+type UploadRequestBuilder struct {
+	fields    map[string]string
+	file      io.Reader
+	filename  string
+	authToken string
+	endpoint  string
+	timeout   time.Duration
+}
+
+// Set the file to upload
+func (b *UploadRequestBuilder) WithFile(file io.Reader, filename string) *UploadRequestBuilder {
+	b.file = file
+	b.filename = filename
+	return b
+}
+
+// Set the auth token
+func (b *UploadRequestBuilder) WithAuthToken(token string) *UploadRequestBuilder {
+	b.authToken = token
+	return b
+}
+
+// Set the upload endpoint URL
+func (b *UploadRequestBuilder) WithEndpoint(endpoint string) *UploadRequestBuilder {
+	b.endpoint = endpoint
+	return b
+}
+
+// Set custom timeout (default: 30s)
+func (b *UploadRequestBuilder) WithTimeout(timeout time.Duration) *UploadRequestBuilder {
+	b.timeout = timeout
+	return b
+}
+
+// Add multiple form fields to the request at once
+func (b *UploadRequestBuilder) AddFields(fields map[string]string) *UploadRequestBuilder {
+	for name, value := range fields {
+		b.fields[name] = value
+	}
+	return b
+}
+
+// Build the request without sending
+func (b *UploadRequestBuilder) Build() (*http.Request, error) {
+	if b.endpoint == "" {
+		return nil, fmt.Errorf("upload endpoint not set")
+	}
+	if b.file == nil {
+		return nil, fmt.Errorf("file not set")
+	}
+
 	// Create multipart form data
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	// Add form fields
-	scanDate := time.Now().Format("2006-01-02")
-	if err := writer.WriteField("scan_date", scanDate); err != nil {
-		return fmt.Errorf("writing scan_date field: %w", err)
-	}
-
-	// Extract product name from repository URL
-	productName := extractProductName(result.Repository)
-	if err := writer.WriteField("product_name", productName); err != nil {
-		return fmt.Errorf("writing product_name field: %w", err)
-	}
-
-	// Use scanner name as engagement name
-	engagementName := fmt.Sprintf("%s-%s", productName, result.Scanner)
-	if err := writer.WriteField("engagement_name", engagementName); err != nil {
-		return fmt.Errorf("writing engagement_name field: %w", err)
-	}
-
-	// Map scanner name to scan type
-	scanType := mapScannerToScanType(result.Scanner)
-	if err := writer.WriteField("scan_type", scanType); err != nil {
-		return fmt.Errorf("writing scan_type field: %w", err)
-	}
-
-	// Enable auto_create_context to make new products/engagements
-	autoCreateContext := "true"
-	if err := writer.WriteField("auto_create_context", autoCreateContext); err != nil {
-		return fmt.Errorf("writing auto_create_context field: %w", err)
-	}
-
-	productType := "Research and Development"
-	if err := writer.WriteField("product_type_name", productType); err != nil {
-		return fmt.Errorf("writing product_type_name field: %w", err)
+	// Add all form fields
+	for name, value := range b.fields {
+		if err := writer.WriteField(name, value); err != nil {
+			return nil, fmt.Errorf("writing field %s: %w", name, err)
+		}
 	}
 
 	// Add the file
-	part, err := writer.CreateFormFile("file", filepath.Base(result.OutputPath))
+	part, err := writer.CreateFormFile("file", b.filename)
 	if err != nil {
-		return fmt.Errorf("creating form file: %w", err)
+		return nil, fmt.Errorf("creating form file: %w", err)
 	}
 
-	if _, err := io.Copy(part, file); err != nil {
-		return fmt.Errorf("copying file data: %w", err)
+	if _, err := io.Copy(part, b.file); err != nil {
+		return nil, fmt.Errorf("copying file data: %w", err)
 	}
 
 	// Close the multipart writer to finalize the form data
 	if err := writer.Close(); err != nil {
-		return fmt.Errorf("closing writer: %w", err)
+		return nil, fmt.Errorf("closing writer: %w", err)
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequest("POST", config.Global.UploadEndpoint, body)
+	req, err := http.NewRequest("POST", b.endpoint, body)
 	if err != nil {
-		return fmt.Errorf("creating request: %w", err)
+		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
 	// Set headers
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.Header.Set("Authorization", fmt.Sprintf("Token %s", authToken))
+	if b.authToken != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Token %s", b.authToken))
+	}
 
-	// Send request with timeout
+	return req, nil
+}
+
+// Send() Builds then send the request
+func (b *UploadRequestBuilder) Send() error {
+	req, err := b.Build()
+	if err != nil {
+		return err
+	}
+
+	// Create HTTP client with timeout
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: b.timeout,
 	}
 
 	resp, err := client.Do(req)
