@@ -191,7 +191,7 @@ func setupDirectories(config *Config) error {
 		config.Global.ResultsDir,
 	}
 	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0640); err != nil {
 			return fmt.Errorf("creating directory %s: %w", dir, err)
 		}
 	}
@@ -297,7 +297,7 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	outputPath := filepath.Join(resultsDir, outputFilename)
 
 	// Ensure output directory exists (create if needed)
-	if err := os.MkdirAll(resultsDir, 0755); err != nil {
+	if err := os.MkdirAll(resultsDir, 0640); err != nil {
 		log.Printf("    ❌ Failed to create results directory %s: %v", resultsDir, err)
 		return ScanResult{
 			Scanner:    scanner.Name,
