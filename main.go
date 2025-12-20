@@ -105,6 +105,7 @@ func main() {
 }
 
 func loadConfig(path string) (*Config, error) {
+	path = filepath.Clean(path)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading config file: %w", err)
