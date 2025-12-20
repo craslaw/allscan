@@ -226,7 +226,10 @@ func runScans(config *Config) []ScanResult {
 		}
 
 		// Clean up repository clone
-		os.RemoveAll(repoPath)
+		err = os.RemoveAll(repoPath)
+		if err != nil {
+			fmt.Printf("Couldn't remove repository clone: %v\n", err)
+		}
 	}
 
 	return results
@@ -240,7 +243,10 @@ func cloneRepository(config *Config, repo RepositoryConfig) (string, error) {
 	repoPath := filepath.Join(config.Global.Workspace, repoName)
 
 	// Remove if exists
-	os.RemoveAll(repoPath)
+	err := os.RemoveAll(repoPath)
+	if err != nil {
+		fmt.Printf("Couldn't remove repository clone: %v\n", err)
+	}
 
 	// Clone
 	log.Printf("  Cloning %s (branch: %s)...", repoName, repo.Branch)
