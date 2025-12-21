@@ -61,7 +61,8 @@ type ScanResult struct {
 
 func main() {
 	// Parse command line flags
-	configPath := flag.String("config", "scanners.yaml", "Path to configuration file")
+	configPath := flag.String("config", "scanners.yaml", "Path to config file")
+	reposPath := flag.String("repos", "repositories.yaml", "Path to repositories config file")
 	dryRun := flag.Bool("dry-run", false, "Print what would be done without executing")
 	flag.Parse()
 
@@ -70,6 +71,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+
+	// Load repositories
+	repositories, err := loadRepositories(*reposPath)
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+	config.Repositories = repositories
 
 	// Parse timeouts
 	if err := parseTimeouts(config); err != nil {
@@ -128,6 +136,24 @@ func loadConfig(path string) (*Config, error) {
 	}
 
 	return &config, nil
+}
+
+func loadRepositories(path string) ([]RepositoryConfig, error) {
+	path = filepath.Clean(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading repositories file: %w", err)
+	}
+
+	var repoConfig struct {
+		Repositories []RepositoryConfig `yaml:"repositories"`
+	}
+
+	if err := yaml.Unmarshal(data, &repoConfig); err != nil {
+		return nil, fmt.Errorf("parsing YAML: %w", err)
+	}
+
+	return repoConfig.Repositories, nil
 }
 
 func parseTimeouts(config *Config) error {

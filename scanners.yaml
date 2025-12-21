@@ -94,18 +94,3 @@ scanners:
       - "**/*.go"
       - "go.mod"
     timeout: "10m"
-
-# List of repositories to scan
-repositories:
-  - url: "https://github.com/craslaw/allscan"
-    branch: "main"
-    # Override global settings for this repo
-    #scanners:
-    #  - "gosec"
-    #  - "gitleaks"
-  
-#  - url: "https://github.com/your-org/repo2"
-#    branch: "develop"
-#    # Use all enabled scanners
-#    scanners: []
-  
