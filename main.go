@@ -619,10 +619,9 @@ func mapScannerToScanType(scannerName string) string {
 	// Map scanner names to common scan type names
 	// Adjust these based on your vulnerability management system's scan types
 	mapping := map[string]string{
-		"gosec":         "Gosec Scanner",
-		"semgrep":       "Semgrep Scan",
-		"gitleaks":      "Gitleaks Scan",
-		"golangci-lint": "Golangci-lint",
+		"gosec":       "Gosec Scanner",
+		"gitleaks":    "Gitleaks Scan",
+		"osv-scanner": "OSV Scan",
 	}
 
 	if scanType, ok := mapping[scannerName]; ok {

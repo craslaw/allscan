@@ -16,6 +16,7 @@
           gitleaks
           golangci-lint
           git
+          osv-scanner
         ];
 
         orchestrator = pkgs.buildGoModule {

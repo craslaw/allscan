@@ -1,4 +1,3 @@
-# scanners.yaml
 # Configuration for vulnerability scanners
 
 # Global settings
@@ -33,6 +32,18 @@ scanners:
       - "go.mod"
     timeout: "5m"
     
+  - name: "osv-scanner"
+    enabled: true
+    command: "osv-scanner"
+    args:
+      - "scan"
+      - "--format"
+      - "json"
+      - "."
+      - "--output"
+      - "{{output}}"
+    timeout: "5m"
+
   - name: "semgrep"
     enabled: false
     command: "semgrep"
@@ -89,9 +100,9 @@ repositories:
   - url: "https://github.com/craslaw/allscan"
     branch: "main"
     # Override global settings for this repo
-    scanners:
-      - "gosec"
-      - "gitleaks"
+    #scanners:
+    #  - "gosec"
+    #  - "gitleaks"
   
 #  - url: "https://github.com/your-org/repo2"
 #    branch: "develop"

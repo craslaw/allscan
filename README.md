@@ -9,6 +9,7 @@ Declarative security scanning
 # Updating
 ## Updating Scanners
 1. `nix flake update`
+
 ## Updating Go script dependencies
 If adding new vendored dependencies, `nix build` will fail if it can't verify
 reproducibility of the dependency. To get the dependency hash and add to the
