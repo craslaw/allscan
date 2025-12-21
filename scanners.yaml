@@ -44,6 +44,15 @@ scanners:
       - "{{output}}"
     timeout: "5m"
 
+  - name: "grype"
+    enabled: true
+    command: "grype"
+    args:
+      - "."
+      - "-o"
+      - "json={{output}}"
+    timeout: "5m"
+
   - name: "semgrep"
     enabled: false
     command: "semgrep"

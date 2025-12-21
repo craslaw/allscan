@@ -648,6 +648,7 @@ func mapScannerToScanType(scannerName string) string {
 		"gosec":       "Gosec Scanner",
 		"gitleaks":    "Gitleaks Scan",
 		"osv-scanner": "OSV Scan",
+		"grype":       "Anchore Grype",
 	}
 
 	if scanType, ok := mapping[scannerName]; ok {

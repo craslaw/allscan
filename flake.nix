@@ -17,6 +17,7 @@
           golangci-lint
           git
           osv-scanner
+          grype
         ];
 
         orchestrator = pkgs.buildGoModule {
