@@ -21,6 +21,7 @@ global:
 scanners:
   - name: "gosec"
     enabled: true
+    dojo_scan_type: "Gosec Scanner"  # Required param for Defect Dojo uploads
     command: "gosec"
     args:
       - "-fmt=json"
@@ -34,6 +35,7 @@ scanners:
     
   - name: "osv-scanner"
     enabled: true
+    dojo_scan_type: "OSV Scan"
     command: "osv-scanner"
     args:
       - "scan"
@@ -47,6 +49,7 @@ scanners:
   - name: "grype"
     enabled: true
     command: "grype"
+    dojo_scan_type: "Anchore Grype"
     args:
       - "."
       - "-o"
@@ -55,6 +58,7 @@ scanners:
 
   - name: "semgrep"
     enabled: false
+    dojo_scan_type: "Semgrep Scan"
     command: "semgrep"
     args:
       - "scan"
@@ -70,6 +74,7 @@ scanners:
     
   - name: "trivy"
     enabled: false
+    dojo_scan_type: "Trivy Scan"
     command: "trivy"
     args:
       - "fs"
@@ -82,6 +87,7 @@ scanners:
     
   - name: "gitleaks"
     enabled: true
+    dojo_scan_type: "Gitleaks Scan"
     command: "gitleaks"
     args:
       - "detect"
@@ -94,6 +100,7 @@ scanners:
     
   - name: "golangci-lint"
     enabled: false  # Disabled by default
+    dojo_scan_type: "Golangci-lint"
     command: "golangci-lint"
     args:
       - "run"

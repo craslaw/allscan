@@ -41,6 +41,7 @@ type ScannerConfig struct {
 	FilePatterns []string      `yaml:"file_patterns"`
 	Timeout      string        `yaml:"timeout"`
 	timeout      time.Duration // parsed timeout
+	DojoScanType string        `yaml:"dojo_scan_type"`
 }
 
 // Target Repositories
@@ -51,12 +52,13 @@ type RepositoryConfig struct {
 }
 
 type ScanResult struct {
-	Scanner    string
-	Repository string
-	OutputPath string
-	Success    bool
-	Error      error
-	Duration   time.Duration
+	Scanner      string
+	Repository   string
+	OutputPath   string
+	Success      bool
+	Error        error
+	Duration     time.Duration
+	DojoScanType string
 }
 
 func main() {
@@ -332,12 +334,13 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	if err := os.MkdirAll(resultsDir, 0640); err != nil {
 		log.Printf("    ❌ Failed to create results directory %s: %v", resultsDir, err)
 		return ScanResult{
-			Scanner:    scanner.Name,
-			Repository: repo.URL,
-			OutputPath: outputPath,
-			Success:    false,
-			Error:      fmt.Errorf("creating results directory: %w", err),
-			Duration:   time.Since(start),
+			Scanner:      scanner.Name,
+			Repository:   repo.URL,
+			OutputPath:   outputPath,
+			Success:      false,
+			Error:        fmt.Errorf("creating results directory: %w", err),
+			Duration:     time.Since(start),
+			DojoScanType: scanner.DojoScanType,
 		}
 	}
 
@@ -347,12 +350,13 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	if _, err := exec.LookPath(scanner.Command); err != nil {
 		log.Printf("    ❌ Scanner %s not found in PATH", scanner.Command)
 		return ScanResult{
-			Scanner:    scanner.Name,
-			Repository: repo.URL,
-			OutputPath: outputPath,
-			Success:    false,
-			Error:      fmt.Errorf("scanner not found: %w", err),
-			Duration:   time.Since(start),
+			Scanner:      scanner.Name,
+			Repository:   repo.URL,
+			OutputPath:   outputPath,
+			Success:      false,
+			Error:        fmt.Errorf("scanner not found: %w", err),
+			Duration:     time.Since(start),
+			DojoScanType: scanner.DojoScanType,
 		}
 	}
 
@@ -379,11 +383,12 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 		if _, statErr := os.Stat(outputPath); statErr == nil {
 			log.Printf("    ✅ %s completed in %v (with findings)", scanner.Name, duration)
 			return ScanResult{
-				Scanner:    scanner.Name,
-				Repository: repo.URL,
-				OutputPath: outputPath,
-				Success:    true,
-				Duration:   duration,
+				Scanner:      scanner.Name,
+				Repository:   repo.URL,
+				OutputPath:   outputPath,
+				Success:      true,
+				Duration:     duration,
+				DojoScanType: scanner.DojoScanType,
 			}
 		}
 
@@ -393,22 +398,24 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 		}
 
 		return ScanResult{
-			Scanner:    scanner.Name,
-			Repository: repo.URL,
-			OutputPath: outputPath,
-			Success:    false,
-			Error:      err,
-			Duration:   duration,
+			Scanner:      scanner.Name,
+			Repository:   repo.URL,
+			OutputPath:   outputPath,
+			Success:      false,
+			Error:        err,
+			Duration:     duration,
+			DojoScanType: scanner.DojoScanType,
 		}
 	}
 
 	log.Printf("    ✅ %s completed in %v", scanner.Name, duration)
 	return ScanResult{
-		Scanner:    scanner.Name,
-		Repository: repo.URL,
-		OutputPath: outputPath,
-		Success:    true,
-		Duration:   duration,
+		Scanner:      scanner.Name,
+		Repository:   repo.URL,
+		OutputPath:   outputPath,
+		Success:      true,
+		Duration:     duration,
+		DojoScanType: scanner.DojoScanType,
 	}
 }
 
@@ -494,7 +501,7 @@ func uploadSingleResult(config *Config, result ScanResult, authToken string) err
 		"scan_date":           time.Now().Format("2006-01-02"),
 		"product_name":        extractProductName(result.Repository),
 		"engagement_name":     fmt.Sprintf("%s-%s", extractProductName(result.Repository), result.Scanner),
-		"scan_type":           mapScannerToScanType(result.Scanner),
+		"scan_type":           result.DojoScanType,
 		"auto_create_context": "true",
 		"product_type_name":   "Research and Development",
 		"do_not_reactivate":   "true",
@@ -638,23 +645,4 @@ func extractProductName(repoURL string) string {
 		return repoName
 	}
 	return "unknown"
-}
-
-// mapScannerToScanType maps scanner names to vulnerability management scan types
-func mapScannerToScanType(scannerName string) string {
-	// Map scanner names to common scan type names
-	// Adjust these based on your vulnerability management system's scan types
-	mapping := map[string]string{
-		"gosec":       "Gosec Scanner",
-		"gitleaks":    "Gitleaks Scan",
-		"osv-scanner": "OSV Scan",
-		"grype":       "Anchore Grype",
-	}
-
-	if scanType, ok := mapping[scannerName]; ok {
-		return scanType
-	}
-
-	// Default: capitalize scanner name
-	return strings.Title(scannerName) + " Scan"
 }
