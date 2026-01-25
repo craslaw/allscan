@@ -7,6 +7,8 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -15,6 +17,7 @@ func main() {
 	configPath := flag.String("config", "scanners.yaml", "Path to config file")
 	reposPath := flag.String("repos", "repositories.yaml", "Path to repositories config file")
 	dryRun := flag.Bool("dry-run", false, "Print what would be done without executing")
+	local := flag.Bool("local", false, "Scan current directory instead of cloning repos (skips upload)")
 	flag.Parse()
 
 	// Load configuration
@@ -23,17 +26,23 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Load repositories
-	repositories, err := loadRepositories(*reposPath)
-	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
-	}
-	config.Repositories = repositories
-
 	// Parse timeouts
 	if err := parseTimeouts(config); err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+
+	// Local mode: scan current directory
+	if *local {
+		runLocalMode(config, *dryRun)
+		return
+	}
+
+	// Remote mode: load and scan repositories
+	repositories, err := loadRepositories(*reposPath)
+	if err != nil {
+		log.Fatalf("Failed to load repositories: %v", err)
+	}
+	config.Repositories = repositories
 
 	log.Printf("🔍 Vulnerability Scanner Orchestrator")
 	log.Printf("Config: %s", *configPath)
@@ -61,6 +70,47 @@ func main() {
 	if config.Global.UploadEndpoint != "" {
 		uploadResults(config, results)
 	}
+}
+
+// runLocalMode scans the current directory without cloning or uploading
+func runLocalMode(config *Config, dryRun bool) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Failed to get current directory: %v", err)
+	}
+
+	// Get directory name for display
+	dirName := filepath.Base(cwd)
+
+	log.Printf("🔍 Vulnerability Scanner Orchestrator")
+	log.Printf("📂 Local mode: scanning %s", cwd)
+	log.Printf("Enabled scanners: %d", countEnabledScanners(config))
+
+	if dryRun {
+		log.Printf("DRY RUN MODE - No scans will be executed")
+		log.Printf("\nEnabled Scanners:")
+		for _, scanner := range config.Scanners {
+			if scanner.Enabled {
+				log.Printf("  - %s (timeout: %s)", scanner.Name, scanner.Timeout)
+				log.Printf("    Command: %s %s", scanner.Command, strings.Join(scanner.Args, " "))
+			}
+		}
+		return
+	}
+
+	// Create results directory
+	if err := setupDirectories(config); err != nil {
+		log.Fatalf("Failed to setup directories: %v", err)
+	}
+
+	// Run scans on current directory
+	results := runLocalScans(config, cwd, dirName)
+
+	// Print summary
+	printSummary(results)
+
+	// Note: No upload in local mode
+	log.Printf("📝 Local mode: results saved to %s (upload skipped)", config.Global.ResultsDir)
 }
 
 // printDryRun displays what would be executed without running anything
