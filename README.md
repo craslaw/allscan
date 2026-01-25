@@ -2,17 +2,18 @@
 Declarative security scanning for git repos
 
 ## Architecture Overview
-
-  ┌──────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-  │ repositories.yaml│────▶│    main.go       │────▶│  scan-results/  │
-  │ (what to scan)   │     │  (orchestrator)  │     │  (JSON output)  │
-  └──────────────────┘     └────────┬─────────┘     └────────┬────────┘
-                                    │                        │
-  ┌──────────────────┐              │                        ▼
-  │ scanners.yaml    │──────────────┘               ┌─────────────────┐
-  │ (how to scan)    │                              │   DefectDojo    │
-  └──────────────────┘                              │   (optional)    │
-                                                    └─────────────────┘
+```
+┌──────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│ repositories.yaml│───▶│   main.go        │────▶│  scan-results/  │
+│ (what to scan)   │     │ (orchestrator)   │     │  (JSON output)  │
+└──────────────────┘     └────────┬─────────┘     └────────┬────────┘
+                                  │                        │
+┌──────────────────┐              │                        ▼
+│ scanners.yaml    │──────────────┘               ┌─────────────────┐
+│ (how to scan)    │                              │   DefectDojo    │
+└──────────────────┘                              │   (optional)    │
+                                                  └─────────────────┘
+```
 
 ##  Core Workflow
 1. Clone - Shallow clones each repository from repositories.yaml
