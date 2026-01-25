@@ -48,10 +48,11 @@ type SecretsParser interface {
 
 // Registry maps scanner names to their parser implementations
 var registry = map[string]ResultParser{
-	"grype":       &GrypeParser{},
-	"osv-scanner": &OSVScannerParser{},
-	"gosec":       &GosecParser{},
-	"gitleaks":    &GitleaksParser{},
+	"grype":           &GrypeParser{},
+	"osv-scanner":     &OSVScannerParser{},
+	"gosec":           &GosecParser{},
+	"gitleaks":        &GitleaksParser{},
+	"binary-detector": &BinaryParser{},
 }
 
 // Get returns the appropriate parser for a scanner name.

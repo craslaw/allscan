@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"vuln-scanner-orchestrator/parsers"
 )
 
 // runScans executes all configured scanners against all repositories
@@ -113,6 +115,37 @@ func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfi
 	}
 
 	log.Printf("  🔎 Running %s...", scanner.Name)
+
+	// Handle built-in scanners
+	if scanner.Command == "builtin:binary-detector" {
+		count, err := parsers.RunBinaryDetector(repoPath, outputPath)
+		duration := time.Since(start)
+		if err != nil {
+			log.Printf("    ❌ %s failed: %v", scanner.Name, err)
+			return ScanResult{
+				Scanner:      scanner.Name,
+				Repository:   repo.URL,
+				OutputPath:   outputPath,
+				Success:      false,
+				Error:        err,
+				Duration:     duration,
+				DojoScanType: scanner.DojoScanType,
+			}
+		}
+		if count > 0 {
+			log.Printf("    ✅ %s completed in %v (found %d binaries)", scanner.Name, duration, count)
+		} else {
+			log.Printf("    ✅ %s completed in %v", scanner.Name, duration)
+		}
+		return ScanResult{
+			Scanner:      scanner.Name,
+			Repository:   repo.URL,
+			OutputPath:   outputPath,
+			Success:      true,
+			Duration:     duration,
+			DojoScanType: scanner.DojoScanType,
+		}
+	}
 
 	// Check if scanner binary exists
 	if _, err := exec.LookPath(scanner.Command); err != nil {
@@ -278,6 +311,37 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	}
 
 	log.Printf("  🔎 Running %s...", scanner.Name)
+
+	// Handle built-in scanners
+	if scanner.Command == "builtin:binary-detector" {
+		count, err := parsers.RunBinaryDetector(repoPath, outputPath)
+		duration := time.Since(start)
+		if err != nil {
+			log.Printf("    ❌ %s failed: %v", scanner.Name, err)
+			return ScanResult{
+				Scanner:      scanner.Name,
+				Repository:   repo.URL,
+				OutputPath:   outputPath,
+				Success:      false,
+				Error:        err,
+				Duration:     duration,
+				DojoScanType: scanner.DojoScanType,
+			}
+		}
+		if count > 0 {
+			log.Printf("    ✅ %s completed in %v (found %d binaries)", scanner.Name, duration, count)
+		} else {
+			log.Printf("    ✅ %s completed in %v", scanner.Name, duration)
+		}
+		return ScanResult{
+			Scanner:      scanner.Name,
+			Repository:   repo.URL,
+			OutputPath:   outputPath,
+			Success:      true,
+			Duration:     duration,
+			DojoScanType: scanner.DojoScanType,
+		}
+	}
 
 	// Check if scanner binary exists
 	if _, err := exec.LookPath(scanner.Command); err != nil {

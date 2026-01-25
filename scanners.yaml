@@ -103,7 +103,15 @@ scanners:
       - "--report-path={{output}}"
     file_patterns: []
     timeout: "3m"
-    
+
+  - name: "binary-detector"
+    enabled: true
+    dojo_scan_type: "Generic Findings Import"
+    command: "builtin:binary-detector"  # Built-in scanner, no external binary needed
+    args: []
+    file_patterns: []
+    timeout: "5m"
+
   - name: "golangci-lint"
     enabled: false  # Disabled by default
     dojo_scan_type: "Golangci-lint"
