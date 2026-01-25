@@ -31,6 +31,7 @@ type ScannerConfig struct {
 	Enabled      bool          `yaml:"enabled"`
 	Command      string        `yaml:"command"`
 	Args         []string      `yaml:"args"`
+	ArgsLocal    []string      `yaml:"args_local"`    // Optional: override args for --local mode
 	FilePatterns []string      `yaml:"file_patterns"`
 	Timeout      string        `yaml:"timeout"`
 	timeout      time.Duration // parsed timeout (unexported)

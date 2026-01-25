@@ -95,6 +95,12 @@ scanners:
       - "--report-format=json"
       - "--report-path={{output}}"
       - "--no-git"
+    # Local mode: respect .gitignore by not using --no-git
+    args_local:
+      - "detect"
+      - "--source=."
+      - "--report-format=json"
+      - "--report-path={{output}}"
     file_patterns: []
     timeout: "3m"
     

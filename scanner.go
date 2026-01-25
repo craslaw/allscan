@@ -128,9 +128,15 @@ func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfi
 		}
 	}
 
+	// Use local args if defined, otherwise fall back to standard args
+	sourceArgs := scanner.Args
+	if len(scanner.ArgsLocal) > 0 {
+		sourceArgs = scanner.ArgsLocal
+	}
+
 	// Prepare arguments with template substitution
-	args := make([]string, len(scanner.Args))
-	for i, arg := range scanner.Args {
+	args := make([]string, len(sourceArgs))
+	for i, arg := range sourceArgs {
 		args[i] = strings.ReplaceAll(arg, "{{output}}", outputPath)
 	}
 
