@@ -10,7 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
+
+const resultsMaxAge = 7 * 24 * time.Hour // 7 days
 
 func main() {
 	// Parse command line flags
@@ -60,6 +63,9 @@ func main() {
 		log.Fatalf("Failed to setup directories: %v", err)
 	}
 
+	// Cleanup old scan results
+	cleanupOldResults(config.Global.ResultsDir)
+
 	// Run scans
 	results := runScans(config)
 
@@ -103,6 +109,9 @@ func runLocalMode(config *Config, dryRun bool) {
 		log.Fatalf("Failed to setup directories: %v", err)
 	}
 
+	// Cleanup old scan results
+	cleanupOldResults(config.Global.ResultsDir)
+
 	// Run scans on current directory
 	results := runLocalScans(config, cwd, dirName)
 
@@ -140,5 +149,40 @@ func printDryRun(config *Config) {
 		} else {
 			log.Printf("    Scanners: all enabled")
 		}
+	}
+}
+
+// cleanupOldResults removes scan result files older than resultsMaxAge
+func cleanupOldResults(resultsDir string) {
+	entries, err := os.ReadDir(resultsDir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("⚠️  Failed to cleanup old results: %v", err)
+		}
+		return
+	}
+
+	cutoff := time.Now().Add(-resultsMaxAge)
+	removed := 0
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		if info.ModTime().Before(cutoff) {
+			if err := os.Remove(filepath.Join(resultsDir, entry.Name())); err == nil {
+				removed++
+			}
+		}
+	}
+
+	if removed > 0 {
+		log.Printf("🧹 Cleaned up %d old scan result(s)", removed)
 	}
 }
