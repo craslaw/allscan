@@ -1,2 +1,4 @@
 result
 scan-results/
+repositories.yaml
+vuln-scanner-orchestrator
