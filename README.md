@@ -4,7 +4,7 @@ Declarative security scanning for git repos
 ## Architecture Overview
 ```
 ┌──────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│ repositories.yaml│───▶│   main.go        │────▶│  scan-results/  │
+│ repositories.yaml│────▶│   main.go        │────▶│  scan-results/  │
 │ (what to scan)   │     │ (orchestrator)   │     │  (JSON output)  │
 └──────────────────┘     └────────┬─────────┘     └────────┬────────┘
                                   │                        │
