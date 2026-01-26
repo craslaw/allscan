@@ -24,38 +24,21 @@ func checkRequiredEnv(required []string) string {
 	return ""
 }
 
-// runScans executes all configured scanners against all repositories
-func runScans(config *Config) []ScanResult {
+// runScannersOnRepo executes all applicable scanners against a single repository
+func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath string) []ScanResult {
 	var results []ScanResult
 
-	for _, repo := range config.Repositories {
-		log.Printf("\n📦 Processing repository: %s", repo.URL)
+	// Determine which scanners to run
+	scannersToRun := getScannersForRepo(config, repo)
 
-		// Clone repository
-		repoPath, err := cloneRepository(config, repo)
-		if err != nil {
-			log.Printf("❌ Failed to clone %s: %v", repo.URL, err)
-			continue
-		}
+	// Run each scanner
+	for _, scanner := range scannersToRun {
+		result := runScanner(config, scanner, repo, repoPath)
+		results = append(results, result)
 
-		// Determine which scanners to run
-		scannersToRun := getScannersForRepo(config, repo)
-
-		// Run each scanner
-		for _, scanner := range scannersToRun {
-			result := runScanner(config, scanner, repo, repoPath)
-			results = append(results, result)
-
-			if !result.Success && config.Global.FailFast {
-				log.Printf("⚠️  Fail-fast enabled, stopping after error")
-				return results
-			}
-		}
-
-		// Clean up repository clone
-		err = os.RemoveAll(repoPath)
-		if err != nil {
-			fmt.Printf("Couldn't remove repository clone: %v\n", err)
+		if !result.Success && config.Global.FailFast {
+			log.Printf("⚠️  Fail-fast enabled, stopping after error")
+			return results
 		}
 	}
 
@@ -252,29 +235,6 @@ func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfi
 	}
 }
 
-// cloneRepository performs a shallow clone of the target repository
-func cloneRepository(config *Config, repo RepositoryConfig) (string, error) {
-	// Extract repo name from URL
-	parts := strings.Split(repo.URL, "/")
-	repoName := strings.TrimSuffix(parts[len(parts)-1], ".git")
-
-	repoPath := filepath.Join(config.Global.Workspace, repoName)
-
-	// Remove if exists
-	err := os.RemoveAll(repoPath)
-	if err != nil {
-		fmt.Printf("Couldn't remove repository clone: %v\n", err)
-	}
-
-	// Clone
-	log.Printf("  Cloning %s (branch: %s)...", repoName, repo.Branch)
-	cmd := exec.Command("git", "clone", "--depth=1", "--branch", repo.Branch, repo.URL, repoPath)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("git clone failed: %w\n%s", err, output)
-	}
-
-	return repoPath, nil
-}
 
 // getScannersForRepo determines which scanners to run on a repository
 func getScannersForRepo(config *Config, repo RepositoryConfig) []ScannerConfig {

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -51,6 +52,103 @@ func promptContinue(missing map[string]string) bool {
 
 	response = strings.TrimSpace(strings.ToLower(response))
 	return response == "y" || response == "yes"
+}
+
+// isValidCachedRepo checks if a directory is a valid git repo with the expected remote URL
+func isValidCachedRepo(repoPath, expectedURL string) bool {
+	// Check if directory exists
+	info, err := os.Stat(repoPath)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+
+	// Check if it's a git repo with the correct remote
+	cmd := exec.Command("git", "remote", "get-url", "origin")
+	cmd.Dir = repoPath
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+
+	// Normalize URLs for comparison (trim whitespace, handle .git suffix)
+	actualURL := strings.TrimSpace(string(output))
+	actualURL = strings.TrimSuffix(actualURL, ".git")
+	expectedNormalized := strings.TrimSuffix(expectedURL, ".git")
+
+	return actualURL == expectedNormalized
+}
+
+// cloneRepository performs a shallow clone of the target repository, or updates an existing cached clone
+func cloneRepository(config *Config, repo RepositoryConfig) (string, error) {
+	// Extract repo name from URL
+	parts := strings.Split(repo.URL, "/")
+	repoName := parts[len(parts)-2] + "/" + strings.TrimSuffix(parts[len(parts)-1], ".git")
+
+	repoPath := filepath.Join(config.Global.Workspace, repoName)
+
+	// Check if repo already exists with correct remote
+	if isValidCachedRepo(repoPath, repo.URL) {
+		log.Printf("  📦 Updating cached repo: %s (branch: %s)...", repoName, repo.Branch)
+
+		// Fetch latest changes
+		fetchCmd := exec.Command("git", "fetch", "origin", repo.Branch, "--depth=1")
+		fetchCmd.Dir = repoPath
+		if _, err := fetchCmd.CombinedOutput(); err != nil {
+			log.Printf("    ⚠️  Fetch failed, will re-clone: %v", err)
+			// Fall through to fresh clone
+		} else {
+			// Reset to fetched branch
+			resetCmd := exec.Command("git", "reset", "--hard", "origin/"+repo.Branch)
+			resetCmd.Dir = repoPath
+			if output, err := resetCmd.CombinedOutput(); err != nil {
+				return "", fmt.Errorf("git reset failed: %w\n%s", err, output)
+			}
+			return repoPath, nil
+		}
+	}
+
+	// Remove if exists (either not valid cache or fetch failed)
+	if err := os.RemoveAll(repoPath); err != nil {
+		log.Printf("    ⚠️  Couldn't remove old repository: %v", err)
+	}
+
+	// Fresh clone
+	log.Printf("  📥 Cloning %s (branch: %s)...", repoName, repo.Branch)
+	cmd := exec.Command("git", "clone", "--depth=1", "--branch", repo.Branch, repo.URL, repoPath)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("git clone failed: %w\n%s", err, output)
+	}
+
+	return repoPath, nil
+}
+
+// runScans clones/updates repositories and runs scanners against them
+func runScans(config *Config) []ScanResult {
+	var results []ScanResult
+
+	for _, repo := range config.Repositories {
+		log.Printf("\n📦 Processing repository: %s", repo.URL)
+
+		// Clone or update repository
+		repoPath, err := cloneRepository(config, repo)
+		if err != nil {
+			log.Printf("❌ Failed to clone %s: %v", repo.URL, err)
+			continue
+		}
+
+		// Run scanners on this repo
+		repoResults := runScannersOnRepo(config, repo, repoPath)
+		results = append(results, repoResults...)
+
+		// Check for fail-fast across all results
+		for _, result := range repoResults {
+			if !result.Success && config.Global.FailFast {
+				return results
+			}
+		}
+	}
+
+	return results
 }
 
 func main() {
