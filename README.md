@@ -57,17 +57,17 @@ orchestrator = pkgs.buildGoModule {
 
 # File Structure
 ## Go
-  allscan/                                                             
-  ├── main.go           (94 lines)   # CLI entry point                 
-  ├── config.go         (143 lines)  # Config structs and loading      
-  ├── scanner.go        (209 lines)  # Scanner execution logic         
-  ├── upload.go         (218 lines)  # DefectDojo upload logic         
-  ├── summary.go        (157 lines)  # Colorful summary printing       
-  └── parsers/                                                         
-      ├── parser.go     (68 lines)   # Interfaces and registry         
-      ├── sca.go        (112 lines)  # GrypeParser, OSVScannerParser   
-      ├── sast.go       (53 lines)   # GosecParser                     
-      └── secrets.go    (39 lines)   # GitleaksParser
+allscan/                                                             
+├── main.go           (94 lines)   # CLI entry point                 
+├── config.go         (143 lines)  # Config structs and loading      
+├── scanner.go        (209 lines)  # Scanner execution logic         
+├── upload.go         (218 lines)  # DefectDojo upload logic         
+├── summary.go        (157 lines)  # Colorful summary printing       
+└── parsers/                                                         
+...├── parser.go     (68 lines)   # Interfaces and registry         
+...├── sca.go        (112 lines)  # GrypeParser, OSVScannerParser   
+...├── sast.go       (53 lines)   # GosecParser                     
+...└── secrets.go    (39 lines)   # GitleaksParser
 
 ## Nix
 The Nix flake manages:
