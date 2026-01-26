@@ -13,6 +13,17 @@ import (
 	"vuln-scanner-orchestrator/parsers"
 )
 
+// checkRequiredEnv verifies that all required environment variables are set.
+// Returns the name of the first missing variable, or empty string if all are set.
+func checkRequiredEnv(required []string) string {
+	for _, envVar := range required {
+		if os.Getenv(envVar) == "" {
+			return envVar
+		}
+	}
+	return ""
+}
+
 // runScans executes all configured scanners against all repositories
 func runScans(config *Config) []ScanResult {
 	var results []ScanResult
@@ -88,6 +99,19 @@ func runLocalScans(config *Config, repoPath string, repoName string) []ScanResul
 // runScannerLocal executes a single scanner against a local directory
 func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfig, repoPath string, repoName string) ScanResult {
 	start := time.Now()
+
+	// Check required environment variables before doing any work
+	if missing := checkRequiredEnv(scanner.RequiredEnv); missing != "" {
+		log.Printf("    ⏭️  Skipping %s: required env var %s not set", scanner.Name, missing)
+		return ScanResult{
+			Scanner:      scanner.Name,
+			Repository:   repo.URL,
+			Success:      false,
+			Error:        fmt.Errorf("required environment variable %s not set", missing),
+			Duration:     time.Since(start),
+			DojoScanType: scanner.DojoScanType,
+		}
+	}
 
 	// Create output path
 	timestamp := time.Now().Format("20060102-150405")
@@ -170,7 +194,9 @@ func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfi
 	// Prepare arguments with template substitution
 	args := make([]string, len(sourceArgs))
 	for i, arg := range sourceArgs {
-		args[i] = strings.ReplaceAll(arg, "{{output}}", outputPath)
+		arg = strings.ReplaceAll(arg, "{{output}}", outputPath)
+		arg = strings.ReplaceAll(arg, "{{repo}}", repo.URL)
+		args[i] = arg
 	}
 
 	// Create command with timeout
@@ -281,6 +307,19 @@ func getScannersForRepo(config *Config, repo RepositoryConfig) []ScannerConfig {
 func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, repoPath string) ScanResult {
 	start := time.Now()
 
+	// Check required environment variables before doing any work
+	if missing := checkRequiredEnv(scanner.RequiredEnv); missing != "" {
+		log.Printf("    ⏭️  Skipping %s: required env var %s not set", scanner.Name, missing)
+		return ScanResult{
+			Scanner:      scanner.Name,
+			Repository:   repo.URL,
+			Success:      false,
+			Error:        fmt.Errorf("required environment variable %s not set", missing),
+			Duration:     time.Since(start),
+			DojoScanType: scanner.DojoScanType,
+		}
+	}
+
 	// Extract repo name for output file
 	parts := strings.Split(repo.URL, "/")
 	repoName := strings.TrimSuffix(parts[len(parts)-1], ".git")
@@ -360,7 +399,9 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	// Prepare arguments with template substitution
 	args := make([]string, len(scanner.Args))
 	for i, arg := range scanner.Args {
-		args[i] = strings.ReplaceAll(arg, "{{output}}", outputPath)
+		arg = strings.ReplaceAll(arg, "{{output}}", outputPath)
+		arg = strings.ReplaceAll(arg, "{{repo}}", repo.URL)
+		args[i] = arg
 	}
 
 	// Create command with timeout

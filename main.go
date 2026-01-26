@@ -5,7 +5,9 @@
 package main
 
 import (
+	"bufio"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -14,6 +16,42 @@ import (
 )
 
 const resultsMaxAge = 7 * 24 * time.Hour // 7 days
+
+// checkAllRequiredEnv checks required environment variables for all enabled scanners.
+// Returns a map of scanner name -> missing env var name for any that are missing.
+func checkAllRequiredEnv(config *Config) map[string]string {
+	missing := make(map[string]string)
+	for _, scanner := range config.Scanners {
+		if !scanner.Enabled {
+			continue
+		}
+		for _, envVar := range scanner.RequiredEnv {
+			if os.Getenv(envVar) == "" {
+				missing[scanner.Name] = envVar
+				break // Only report first missing var per scanner
+			}
+		}
+	}
+	return missing
+}
+
+// promptContinue asks the user if they want to continue and returns their choice.
+func promptContinue(missing map[string]string) bool {
+	fmt.Println("\n⚠️  Missing required environment variables:")
+	for scanner, envVar := range missing {
+		fmt.Printf("   • %s%s%s%s requires %s%s%s\n", ColorBold, ColorCyan, scanner, ColorReset, ColorYellow, envVar, ColorReset)
+	}
+	fmt.Print("\nContinue without these scanners? [y/N]: ")
+
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return false
+	}
+
+	response = strings.TrimSpace(strings.ToLower(response))
+	return response == "y" || response == "yes"
+}
 
 func main() {
 	// Parse command line flags
@@ -32,6 +70,13 @@ func main() {
 	// Parse timeouts
 	if err := parseTimeouts(config); err != nil {
 		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	// Check required environment variables for all enabled scanners
+	if missing := checkAllRequiredEnv(config); len(missing) > 0 {
+		if !promptContinue(missing) {
+			log.Fatalf("Aborted: missing required environment variables")
+		}
 	}
 
 	// Local mode: scan current directory
