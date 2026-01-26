@@ -39,7 +39,7 @@ func checkAllRequiredEnv(config *Config) map[string]string {
 func promptContinue(missing map[string]string) bool {
 	fmt.Println("\n⚠️  Missing required environment variables:")
 	for scanner, envVar := range missing {
-		fmt.Printf("   • %s requires %s\n", scanner, envVar)
+		fmt.Printf("   • %s%s%s%s requires %s%s%s\n", ColorBold, ColorCyan, scanner, ColorReset, ColorYellow, envVar, ColorReset)
 	}
 	fmt.Print("\nContinue without these scanners? [y/N]: ")
 
