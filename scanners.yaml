@@ -139,3 +139,5 @@ scanners:
       - "--output={{output}}"
     file_patterns: []
     timeout: "5m"
+    required_env:
+      - "GITHUB_TOKEN"

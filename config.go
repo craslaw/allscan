@@ -36,6 +36,7 @@ type ScannerConfig struct {
 	Timeout      string        `yaml:"timeout"`
 	timeout      time.Duration // parsed timeout (unexported)
 	DojoScanType string        `yaml:"dojo_scan_type"`
+	RequiredEnv  []string      `yaml:"required_env"` // Environment variables that must be set
 }
 
 // RepositoryConfig defines a target repository to scan
