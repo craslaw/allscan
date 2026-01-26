@@ -33,6 +33,12 @@ func uploadResults(config *Config, results []ScanResult) {
 			continue
 		}
 
+		// Skip scanners without a DefectDojo scan type (stdout-only scanners)
+		if result.DojoScanType == "" {
+			log.Printf("  ⏭️  Skipping %s (no DefectDojo scan type configured)", result.Scanner)
+			continue
+		}
+
 		if err := uploadSingleResult(config, result, authToken); err != nil {
 			log.Printf("  ❌ Failed to upload %s: %v", result.OutputPath, err)
 			failCount++

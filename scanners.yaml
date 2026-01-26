@@ -124,3 +124,18 @@ scanners:
       - "**/*.go"
       - "go.mod"
     timeout: "10m"
+
+  - name: "scorecard"
+    enabled: true
+    # No dojo_scan_type - this scanner outputs to stdout only, never uploads
+    command: "scorecard"
+    args:
+      - "--repo={{repo}}"
+      - "--format=json"
+      - "--output={{output}}"
+    args_local:
+      - "--local=."
+      - "--format=json"
+      - "--output={{output}}"
+    file_patterns: []
+    timeout: "5m"

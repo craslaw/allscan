@@ -67,7 +67,15 @@ func printSummary(results []ScanResult) {
 			// Parse the scan output using the appropriate parser
 			summary, parser := parseScanOutput(result)
 			if parser != nil {
-				printScannerSummary(parser, summary)
+				// Scorecard gets detailed stdout output
+				if parser.Type() == "Scorecard" {
+					if err := parsers.PrintScorecardReport(result.OutputPath); err != nil {
+						fmt.Printf("  %s❌ %s%s: %sFailed to print report%s - %v\n",
+							colorRed, result.Scanner, colorReset, colorRed, colorReset, err)
+					}
+				} else {
+					printScannerSummary(parser, summary)
+				}
 			} else {
 				// Unknown scanner - show basic info
 				fmt.Printf("  🔧 %s%s%s (%sUnknown%s)\n", colorBold, result.Scanner, colorReset, colorDim, colorReset)

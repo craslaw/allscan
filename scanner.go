@@ -170,7 +170,9 @@ func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfi
 	// Prepare arguments with template substitution
 	args := make([]string, len(sourceArgs))
 	for i, arg := range sourceArgs {
-		args[i] = strings.ReplaceAll(arg, "{{output}}", outputPath)
+		arg = strings.ReplaceAll(arg, "{{output}}", outputPath)
+		arg = strings.ReplaceAll(arg, "{{repo}}", repo.URL)
+		args[i] = arg
 	}
 
 	// Create command with timeout
@@ -360,7 +362,9 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	// Prepare arguments with template substitution
 	args := make([]string, len(scanner.Args))
 	for i, arg := range scanner.Args {
-		args[i] = strings.ReplaceAll(arg, "{{output}}", outputPath)
+		arg = strings.ReplaceAll(arg, "{{output}}", outputPath)
+		arg = strings.ReplaceAll(arg, "{{repo}}", repo.URL)
+		args[i] = arg
 	}
 
 	// Create command with timeout
