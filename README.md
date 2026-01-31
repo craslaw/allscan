@@ -1,5 +1,24 @@
-# allscan
-Declarative security scanning
+# Allscan
+Declarative security scanning for git repos
+
+## Architecture Overview
+
+  ┌──────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+  │ repositories.yaml│────▶│    main.go       │────▶│  scan-results/  │
+  │ (what to scan)   │     │  (orchestrator)  │     │  (JSON output)  │
+  └──────────────────┘     └────────┬─────────┘     └────────┬────────┘
+                                    │                        │
+  ┌──────────────────┐              │                        ▼
+  │ scanners.yaml    │──────────────┘               ┌─────────────────┐
+  │ (how to scan)    │                              │   DefectDojo    │
+  └──────────────────┘                              │   (optional)    │
+                                                    └─────────────────┘
+
+##  Core Workflow
+1. Clone - Shallow clones each repository from repositories.yaml
+2. Scan - Runs configured scanners against the cloned code
+3. Collect - Saves JSON results to scan-results/
+4. Upload - Optionally pushes findings to DefectDojo vulnerability management platform
 
 # Use
 1. `nix develop`
@@ -35,7 +54,7 @@ orchestrator = pkgs.buildGoModule {
 6. Retry step 4, then replace the hash in flake.nix with the actual hash
 7. `nix run` should now work
 
-# Architecture
+# File Structure
 The Nix flake manages:
 1. Scanner binaries that are stored in `/nix/store`
 2. Go dev environment and packaging for the main.go script.
