@@ -28,8 +28,8 @@ func checkRequiredEnv(required []string) string {
 func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath string) []ScanResult {
 	var results []ScanResult
 
-	// Detect languages in the repository
-	detected, err := detectLanguages(repoPath)
+	// Detect languages in the repository (tries GitHub API first, then filesystem)
+	detected, err := detectLanguages(repoPath, repo.URL)
 	if err != nil {
 		log.Printf("  ⚠️  Failed to detect languages: %v", err)
 		detected = &DetectedLanguages{Languages: []string{}, FileCounts: map[string]int{}}
@@ -60,8 +60,8 @@ func runLocalScans(config *Config, repoPath string, repoName string) []ScanResul
 
 	log.Printf("\n📂 Scanning local directory: %s", repoPath)
 
-	// Detect languages in the directory
-	detected, err := detectLanguages(repoPath)
+	// Detect languages in the directory (local mode always uses filesystem)
+	detected, err := detectLanguages(repoPath, "")
 	if err != nil {
 		log.Printf("  ⚠️  Failed to detect languages: %v", err)
 		detected = &DetectedLanguages{Languages: []string{}, FileCounts: map[string]int{}}
