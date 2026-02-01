@@ -10,7 +10,39 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        
+
+        # Socket CLI - Supply chain security scanner
+        # https://github.com/SocketDev/socket-cli
+        #
+        # To enable Socket CLI:
+        # 1. Run: nix build .#socket-cli 2>&1 | grep "got:"
+        # 2. Update the 'hash' below with the output
+        # 3. Run again to get npmDepsHash
+        # 4. Uncomment socket-cli in the scanners list below
+        socket-cli = pkgs.buildNpmPackage {
+          pname = "socket-cli";
+          version = "1.1.50";
+
+          src = pkgs.fetchFromGitHub {
+            owner = "SocketDev";
+            repo = "socket-cli";
+            rev = "v1.1.50";
+            # Run: nix build .#socket-cli to get correct hash
+            hash = pkgs.lib.fakeHash;
+          };
+
+          # Run: nix build .#socket-cli to get correct hash after fixing src hash
+          npmDepsHash = pkgs.lib.fakeHash;
+
+          dontNpmBuild = true;
+
+          meta = with pkgs.lib; {
+            description = "Socket.dev CLI for supply chain security scanning";
+            homepage = "https://socket.dev";
+            license = licenses.mit;
+          };
+        };
+
         scanners = with pkgs; [
           gosec
           gitleaks
@@ -18,6 +50,7 @@
           git
           osv-scanner
           grype
+          # socket-cli  # Uncomment after updating hashes above
         ];
 
         orchestrator = pkgs.buildGoModule {
@@ -34,7 +67,7 @@
       {
         packages = {
           default = orchestrator;
-          inherit orchestrator;
+          inherit orchestrator socket-cli;
           scanners-only = pkgs.buildEnv {
             name = "scanners";
             paths = scanners;
