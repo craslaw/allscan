@@ -11,15 +11,15 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
-        # Socket CLI - Supply chain security scanner
+        # Socket CLI - Supply chain security scanner (uses pnpm)
         # https://github.com/SocketDev/socket-cli
         #
         # To enable Socket CLI:
         # 1. Run: nix build .#socket-cli 2>&1 | grep "got:"
-        # 2. Update the 'hash' below with the output
-        # 3. Run again to get npmDepsHash
+        # 2. Update the source 'hash' below with the output
+        # 3. Run again to get pnpmDeps hash
         # 4. Uncomment socket-cli in the scanners list below
-        socket-cli = pkgs.buildNpmPackage {
+        socket-cli = pkgs.stdenv.mkDerivation (finalAttrs: {
           pname = "socket-cli";
           version = "1.1.50";
 
@@ -31,17 +31,39 @@
             hash = pkgs.lib.fakeHash;
           };
 
-          # Run: nix build .#socket-cli to get correct hash after fixing src hash
-          npmDepsHash = pkgs.lib.fakeHash;
+          nativeBuildInputs = [
+            pkgs.nodejs
+            pkgs.pnpm_9.configHook
+            pkgs.pnpm_9
+          ];
 
-          dontNpmBuild = true;
+          # Run: nix build .#socket-cli to get correct hash after fixing src hash
+          pnpmDeps = pkgs.pnpm_9.fetchDeps {
+            inherit (finalAttrs) pname version src;
+            hash = pkgs.lib.fakeHash;
+          };
+
+          buildPhase = ''
+            runHook preBuild
+            pnpm build
+            runHook postBuild
+          '';
+
+          installPhase = ''
+            runHook preInstall
+            mkdir -p $out/bin $out/lib/socket-cli
+            cp -r . $out/lib/socket-cli
+            ln -s $out/lib/socket-cli/node_modules/.bin/socket $out/bin/socket
+            runHook postInstall
+          '';
 
           meta = with pkgs.lib; {
             description = "Socket.dev CLI for supply chain security scanning";
             homepage = "https://socket.dev";
             license = licenses.mit;
+            mainProgram = "socket";
           };
-        };
+        });
 
         scanners = with pkgs; [
           gosec
