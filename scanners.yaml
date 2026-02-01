@@ -172,3 +172,20 @@ scanners:
     timeout: "5m"
     required_env:
       - "GITHUB_TOKEN"
+
+  - name: "socket"
+    enabled: false  # Disabled by default - requires Socket API token
+    dojo_scan_type: "Generic Findings Import"  # No native DefectDojo parser yet
+    command: "socket"
+    args:
+      - "scan"
+      - "create"
+      - "."
+      - "--json"
+      - "--file={{output}}"
+    file_patterns: []
+    # Universal SCA scanner - supports npm, pip, go, gems, etc.
+    languages: []
+    timeout: "10m"
+    required_env:
+      - "SOCKET_SECURITY_API_TOKEN"

@@ -50,6 +50,7 @@ type SecretsParser interface {
 var registry = map[string]ResultParser{
 	"grype":           &GrypeParser{},
 	"osv-scanner":     &OSVScannerParser{},
+	"socket":          &SocketParser{},
 	"gosec":           &GosecParser{},
 	"gitleaks":        &GitleaksParser{},
 	"binary-detector": &BinaryParser{},

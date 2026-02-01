@@ -110,3 +110,95 @@ func (p *OSVScannerParser) Parse(data []byte) (FindingSummary, error) {
 
 // Verify OSVScannerParser implements SCAParser
 var _ SCAParser = (*OSVScannerParser)(nil)
+
+// ============================================================================
+// Socket Parser - Socket.dev Supply Chain Security Scanner
+// ============================================================================
+
+// SocketParser parses Socket.dev CLI scan results.
+// Socket analyzes dependencies for supply chain risks, CVEs, and security issues.
+type SocketParser struct{}
+
+// socketOutput represents the Socket CLI JSON output structure
+type socketOutput struct {
+	// Socket outputs alerts/issues with severity levels
+	Alerts []struct {
+		Severity string `json:"severity"`
+		Type     string `json:"type"`
+	} `json:"alerts"`
+	// Alternative structure: issues array
+	Issues []struct {
+		Severity string `json:"severity"`
+		Type     string `json:"type"`
+	} `json:"issues"`
+	// Alternative structure: findings array (common format)
+	Findings []struct {
+		Severity string `json:"severity"`
+	} `json:"findings"`
+	// Alternative: results with nested vulnerabilities
+	Results []struct {
+		Alerts []struct {
+			Severity string `json:"severity"`
+		} `json:"alerts"`
+	} `json:"results"`
+}
+
+func (p *SocketParser) Name() string { return "socket" }
+func (p *SocketParser) Type() string { return "SCA" }
+func (p *SocketParser) Icon() string { return "🔌" }
+
+func (p *SocketParser) Parse(data []byte) (FindingSummary, error) {
+	var output socketOutput
+	var summary FindingSummary
+
+	if err := json.Unmarshal(data, &output); err != nil {
+		return summary, err
+	}
+
+	// Count from alerts array
+	for _, alert := range output.Alerts {
+		summary.Total++
+		countSeverity(&summary, alert.Severity)
+	}
+
+	// Count from issues array
+	for _, issue := range output.Issues {
+		summary.Total++
+		countSeverity(&summary, issue.Severity)
+	}
+
+	// Count from findings array
+	for _, finding := range output.Findings {
+		summary.Total++
+		countSeverity(&summary, finding.Severity)
+	}
+
+	// Count from nested results
+	for _, result := range output.Results {
+		for _, alert := range result.Alerts {
+			summary.Total++
+			countSeverity(&summary, alert.Severity)
+		}
+	}
+
+	return summary, nil
+}
+
+// countSeverity increments the appropriate severity counter
+func countSeverity(summary *FindingSummary, severity string) {
+	switch strings.ToLower(severity) {
+	case "critical":
+		summary.Critical++
+	case "high":
+		summary.High++
+	case "medium", "moderate":
+		summary.Medium++
+	case "low":
+		summary.Low++
+	default:
+		summary.Info++
+	}
+}
+
+// Verify SocketParser implements SCAParser
+var _ SCAParser = (*SocketParser)(nil)

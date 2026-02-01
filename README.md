@@ -35,6 +35,7 @@ Allscan automatically selects scanners based on detected repository languages. S
 | osv-scanner | SCA | ✓ | *Universal* |
 | grype | SCA | ✓ | *Universal* |
 | trivy | SCA | | *Universal* |
+| socket | SCA | | *Universal* |
 | gitleaks | Secrets | ✓ | *Universal* |
 | binary-detector | Binary | ✓ | *Universal* |
 | scorecard | Posture | ✓ | *Universal* |
