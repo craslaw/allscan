@@ -33,12 +33,12 @@
 
           nativeBuildInputs = [
             pkgs.nodejs
-            pkgs.pnpm_9.configHook
+            pkgs.pnpmConfigHook
             pkgs.pnpm_9
           ];
 
           # Run: nix build .#socket-cli to get correct hash after fixing src hash
-          pnpmDeps = pkgs.pnpm_9.fetchDeps {
+          pnpmDeps = pkgs.fetchPnpmDeps {
             inherit (finalAttrs) pname version src;
             hash = pkgs.lib.fakeHash;
           };
