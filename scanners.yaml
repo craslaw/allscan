@@ -31,6 +31,8 @@ scanners:
     file_patterns:
       - "**/*.go"
       - "go.mod"
+    languages:
+      - "go"
     timeout: "5m"
     
   - name: "osv-scanner"
@@ -44,6 +46,8 @@ scanners:
       - "."
       - "--output"
       - "{{output}}"
+    # Universal SCA scanner - runs on all languages (empty = no restrictions)
+    languages: []
     timeout: "5m"
 
   - name: "grype"
@@ -54,6 +58,8 @@ scanners:
       - "."
       - "-o"
       - "json={{output}}"
+    # Universal SCA scanner - runs on all languages (empty = no restrictions)
+    languages: []
     timeout: "5m"
 
   - name: "semgrep"
@@ -70,6 +76,21 @@ scanners:
       - "**/*.js"
       - "**/*.go"
       - "**/*.java"
+    languages:
+      - "python"
+      - "javascript"
+      - "typescript"
+      - "go"
+      - "java"
+      - "ruby"
+      - "php"
+      - "c"
+      - "cpp"
+      - "csharp"
+      - "kotlin"
+      - "scala"
+      - "rust"
+      - "swift"
     timeout: "10m"
     
   - name: "trivy"
@@ -83,6 +104,8 @@ scanners:
       - "."
     # Run on all repos
     file_patterns: []
+    # Universal scanner - runs on all languages (empty = no restrictions)
+    languages: []
     timeout: "5m"
     
   - name: "gitleaks"
@@ -102,6 +125,8 @@ scanners:
       - "--report-format=json"
       - "--report-path={{output}}"
     file_patterns: []
+    # Universal secrets scanner - runs on all languages (empty = no restrictions)
+    languages: []
     timeout: "3m"
 
   - name: "binary-detector"
@@ -110,6 +135,8 @@ scanners:
     command: "builtin:binary-detector"  # Built-in scanner, no external binary needed
     args: []
     file_patterns: []
+    # Universal scanner - runs on all repos (empty = no restrictions)
+    languages: []
     timeout: "5m"
 
   - name: "golangci-lint"
@@ -123,6 +150,8 @@ scanners:
     file_patterns:
       - "**/*.go"
       - "go.mod"
+    languages:
+      - "go"
     timeout: "10m"
 
   - name: "scorecard"
@@ -138,6 +167,8 @@ scanners:
       - "--format=json"
       - "--output={{output}}"
     file_patterns: []
+    # Universal scanner - runs on all repos (empty = no restrictions)
+    languages: []
     timeout: "5m"
     required_env:
       - "GITHUB_TOKEN"

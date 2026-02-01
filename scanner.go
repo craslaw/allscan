@@ -28,8 +28,17 @@ func checkRequiredEnv(required []string) string {
 func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath string) []ScanResult {
 	var results []ScanResult
 
-	// Determine which scanners to run
-	scannersToRun := getScannersForRepo(config, repo)
+	// Detect languages in the repository (tries GitHub API first, then filesystem)
+	detected, err := detectLanguages(repoPath, repo.URL)
+	if err != nil {
+		log.Printf("  ⚠️  Failed to detect languages: %v", err)
+		detected = &DetectedLanguages{Languages: []string{}, FileCounts: map[string]int{}}
+	} else {
+		logDetectedLanguages(detected)
+	}
+
+	// Determine which scanners to run based on repo config and detected languages
+	scannersToRun := getScannersForRepo(config, repo, detected)
 
 	// Run each scanner
 	for _, scanner := range scannersToRun {
@@ -51,12 +60,13 @@ func runLocalScans(config *Config, repoPath string, repoName string) []ScanResul
 
 	log.Printf("\n📂 Scanning local directory: %s", repoPath)
 
-	// Get all enabled scanners
-	var scannersToRun []ScannerConfig
-	for _, scanner := range config.Scanners {
-		if scanner.Enabled {
-			scannersToRun = append(scannersToRun, scanner)
-		}
+	// Detect languages in the directory (local mode always uses filesystem)
+	detected, err := detectLanguages(repoPath, "")
+	if err != nil {
+		log.Printf("  ⚠️  Failed to detect languages: %v", err)
+		detected = &DetectedLanguages{Languages: []string{}, FileCounts: map[string]int{}}
+	} else {
+		logDetectedLanguages(detected)
 	}
 
 	// Create a fake repo config for the local directory
@@ -64,6 +74,9 @@ func runLocalScans(config *Config, repoPath string, repoName string) []ScanResul
 		URL:    "local://" + repoPath,
 		Branch: "local",
 	}
+
+	// Get scanners compatible with detected languages
+	scannersToRun := getScannersForRepo(config, localRepo, detected)
 
 	// Run each scanner
 	for _, scanner := range scannersToRun {
@@ -237,15 +250,20 @@ func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfi
 
 
 // getScannersForRepo determines which scanners to run on a repository
-func getScannersForRepo(config *Config, repo RepositoryConfig) []ScannerConfig {
+// It filters based on repo-specific scanner list, enabled status, and language compatibility
+func getScannersForRepo(config *Config, repo RepositoryConfig, detected *DetectedLanguages) []ScannerConfig {
 	var scanners []ScannerConfig
 
-	// If repo specifies scanners, use only those
+	// If repo specifies scanners, use only those (still filtered by language)
 	if len(repo.Scanners) > 0 {
 		for _, name := range repo.Scanners {
 			for _, scanner := range config.Scanners {
 				if scanner.Name == name && scanner.Enabled {
-					scanners = append(scanners, scanner)
+					if isScannerCompatible(scanner, detected) {
+						scanners = append(scanners, scanner)
+					} else {
+						log.Printf("    ⏭️  Skipping %s: no compatible languages detected", scanner.Name)
+					}
 					break
 				}
 			}
@@ -253,14 +271,35 @@ func getScannersForRepo(config *Config, repo RepositoryConfig) []ScannerConfig {
 		return scanners
 	}
 
-	// Otherwise use all enabled scanners
+	// Otherwise use all enabled scanners that are compatible with detected languages
 	for _, scanner := range config.Scanners {
 		if scanner.Enabled {
-			scanners = append(scanners, scanner)
+			if isScannerCompatible(scanner, detected) {
+				scanners = append(scanners, scanner)
+			} else {
+				log.Printf("    ⏭️  Skipping %s: no compatible languages detected", scanner.Name)
+			}
 		}
 	}
 
 	return scanners
+}
+
+// isScannerCompatible checks if a scanner should run based on detected languages
+// Scanners with empty Languages list are considered universal and always run
+func isScannerCompatible(scanner ScannerConfig, detected *DetectedLanguages) bool {
+	// If scanner has no language restrictions, it's compatible with everything
+	if len(scanner.Languages) == 0 {
+		return true
+	}
+
+	// If no languages were detected but scanner requires specific languages, skip it
+	if len(detected.Languages) == 0 {
+		return false
+	}
+
+	// Check if any of the scanner's supported languages were detected
+	return detected.hasAnyLanguage(scanner.Languages)
 }
 
 // runScanner executes a single scanner against a repository
