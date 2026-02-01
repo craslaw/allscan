@@ -17,9 +17,36 @@ Declarative security scanning for git repos
 
 ##  Core Workflow
 1. Clone - Shallow clones each repository from repositories.yaml
-2. Scan - Runs configured scanners against the cloned code
-3. Collect - Saves JSON results to scan-results/
-4. Upload - Optionally pushes findings to DefectDojo vulnerability management platform
+2. Detect - Identifies languages via GitHub API (or filesystem scan as fallback)
+3. Select - Chooses compatible scanners based on detected languages
+4. Scan - Runs configured scanners against the cloned code
+5. Collect - Saves JSON results to scan-results/
+6. Upload - Optionally pushes findings to DefectDojo vulnerability management platform
+
+## Scanners
+
+Allscan automatically selects scanners based on detected repository languages. Scanners marked as "Universal" run on all repositories regardless of language.
+
+| Scanner | Type | Default | Languages |
+|---------|------|:-------:|-----------|
+| gosec | SAST | ✓ | Go |
+| golangci-lint | SAST | | Go |
+| semgrep | SAST | | Go, Python, JavaScript, TypeScript, Java, Kotlin, Scala, Ruby, PHP, C, C++, C#, Rust, Swift |
+| osv-scanner | SCA | ✓ | *Universal* |
+| grype | SCA | ✓ | *Universal* |
+| trivy | SCA | | *Universal* |
+| gitleaks | Secrets | ✓ | *Universal* |
+| binary-detector | Binary | ✓ | *Universal* |
+| scorecard | Posture | ✓ | *Universal* |
+
+**Legend:**
+- **SAST** - Static Application Security Testing (source code analysis)
+- **SCA** - Software Composition Analysis (dependency vulnerabilities)
+- **Secrets** - Credential and secret detection
+- **Binary** - Binary file detection
+- **Posture** - Security posture/health metrics (OpenSSF Scorecard)
+- **Default ✓** - Enabled by default in `scanners.yaml`
+- ***Universal*** - Runs on all repositories regardless of detected language
 
 # Use
 1. `nix develop`
