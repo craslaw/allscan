@@ -41,6 +41,7 @@
           pnpmDeps = pkgs.fetchPnpmDeps {
             inherit (finalAttrs) pname version src;
             hash = pkgs.lib.fakeHash;
+            fetcherVersion = 4;
           };
 
           buildPhase = ''
