@@ -33,6 +33,7 @@ type ScannerConfig struct {
 	Args         []string      `yaml:"args"`
 	ArgsLocal    []string      `yaml:"args_local"`    // Optional: override args for --local mode
 	FilePatterns []string      `yaml:"file_patterns"`
+	Languages    []string      `yaml:"languages"`     // Languages this scanner is compatible with (empty = all languages)
 	Timeout      string        `yaml:"timeout"`
 	timeout      time.Duration // parsed timeout (unexported)
 	DojoScanType string        `yaml:"dojo_scan_type"`
