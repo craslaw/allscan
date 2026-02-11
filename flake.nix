@@ -28,7 +28,7 @@
             repo = "socket-cli";
             rev = "v1.1.50";
             # Run: nix build .#socket-cli to get correct hash
-            hash = pkgs.lib.fakeHash;
+            hash = "sha256-i1r83HEcAVzUIL+NIDiw2skWjBc6NP8YwcNd3rgH+8E=";
           };
 
           nativeBuildInputs = [
@@ -40,8 +40,8 @@
           # Run: nix build .#socket-cli to get correct hash after fixing src hash
           pnpmDeps = pkgs.fetchPnpmDeps {
             inherit (finalAttrs) pname version src;
-            hash = pkgs.lib.fakeHash;
-            fetcherVersion = 4;
+            hash = "sha256-Zpip2e071nZb6hwT8P0TaF1iVnpXF4zjynu/HEiaAVw=";
+            fetcherVersion = 3;
           };
 
           buildPhase = ''
