@@ -65,13 +65,19 @@ When adding a new scanner, you MUST complete ALL of the following steps:
    - Implement `Parse()`, `Type()`, `Icon()`, `Name()` methods
    - Register in `registry` map in `parsers/parser.go`
 
-3. **Add scanner config** (`scanners.yaml`):
+3. **Write parser tests** (`parsers/<type>_test.go`):
+   - Write tests BEFORE implementing the parser (TDD)
+   - Cover: empty input (no findings), multiple findings with mixed severities, boundary values for severity mappings, invalid JSON (error case)
+   - Use table-driven tests with `t.Run()` subtests
+   - Run `go test -v ./parsers/...` to verify
+
+4. **Add scanner config** (`scanners.yaml`):
    - Add scanner entry with name, command, args, timeout
    - Set `dojo_scan_type` for DefectDojo integration
    - Add `languages` array (empty `[]` for universal scanners)
    - Add `required_env` if API tokens are needed
 
-4. **Update documentation**:
+5. **Update documentation**:
    - Add scanner to README.md compatibility matrix
    - Update docs/scanners.md if adding new parser patterns
 
@@ -102,3 +108,50 @@ new-scanner = pkgs.buildNpmPackage {
 **Scanner Args:**
 - `{{output}}` template is replaced with output file path
 - `args_local` overrides `args` in `--local` mode (e.g., gitleaks respects .gitignore locally)
+
+## Testing
+
+**Running Tests:**
+
+```bash
+# Run all tests
+go test ./...
+
+# Verbose output (shows individual test case names)
+go test -v ./...
+
+# Run only parser tests
+go test -v ./parsers/...
+
+# Run only root package tests (config, scanner, language, upload)
+go test -v .
+
+# Run a specific test function
+go test -v -run TestGrypeParser_Parse ./parsers/...
+
+# Run a specific subtest
+go test -v -run TestGrypeParser_Parse/mixed_severities ./parsers/...
+
+# Show test coverage percentage
+go test -cover ./...
+```
+
+**Test-Driven Development (TDD) Workflow:**
+
+When adding new functions or features, follow this workflow:
+
+1. **Write a failing test first** in the appropriate `*_test.go` file using table-driven tests
+2. **Run the test** to confirm it fails: `go test -v -run TestNewThing ./...`
+3. **Write the minimum code** to make the test pass
+4. **Run tests again** to confirm they pass: `go test -v ./...`
+5. **Refactor** while keeping tests green
+
+**Test Conventions:**
+
+- Test files: `foo_test.go` next to `foo.go` (parsers tests in `parsers/` dir)
+- Test functions: `TestFunctionName(t *testing.T)`
+- Use table-driven tests with `t.Run()` subtests for multiple cases
+- Use `t.TempDir()` for tests that need temporary filesystem access
+- Use `t.Setenv()` for tests that check environment variables
+- Standard `testing` package only -- no external test libraries
+- Always run `go test ./...` after any code changes to catch regressions
