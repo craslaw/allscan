@@ -53,6 +53,63 @@ Allscan automatically selects scanners based on detected repository languages. S
 2. `export VULN_MGMT_API_TOKEN="your-defectdojo-token"`
 3. `nix run`
 
+## Dependency Management & Version Pinning
+
+Allscan scans its own dependencies to ensure supply chain security. The `repositories.yaml` file contains:
+- Scanner tool repositories (gosec, gitleaks, etc.)
+- Nix flake inputs (flake-utils)
+- Go module dependencies (from go.sum)
+
+### Automatic Version Sync
+
+Scanner versions are automatically synchronized with your locked nixpkgs. When you enter the development shell, the shell hook updates `repositories.yaml` with versions from `flake.lock`:
+
+```bash
+# Update to latest nixpkgs
+nix flake update
+
+# Enter dev shell - repositories.yaml is auto-updated
+nix develop
+# Output: 📦 Updated repositories.yaml with scanner versions from flake.lock
+```
+
+### Version Pinning Options
+
+Each repository entry supports three ways to pin versions:
+
+```yaml
+repositories:
+  # Pin to a specific tag (highest precedence)
+  - url: "https://github.com/owner/repo"
+    version: "v1.2.3"
+
+  # Pin to a specific commit hash
+  - url: "https://github.com/owner/repo"
+    commit: "abc1234"
+
+  # Track latest on branch (default behavior)
+  - url: "https://github.com/owner/repo"
+    branch: "main"
+```
+
+**Precedence:** version tag > commit hash > branch (latest)
+
+### Version Validation
+
+When both `version` and `commit` are specified, allscan validates they match. A warning is displayed if the tag points to a different commit:
+
+```
+⚠️  WARNING: Tag v1.0.0 points to def5678, but expected abc1234
+```
+
+### DefectDojo Integration
+
+Version information is included in DefectDojo uploads:
+- `branch_tag`: The branch or tag name scanned
+- `commit_hash`: The actual commit hash scanned
+
+This enables tracking findings against specific code versions.
+
 # Updating
 ## Updating Scanners
 1. `nix flake update`

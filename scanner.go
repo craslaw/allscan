@@ -25,7 +25,7 @@ func checkRequiredEnv(required []string) string {
 }
 
 // runScannersOnRepo executes all applicable scanners against a single repository
-func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath string) []ScanResult {
+func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath, commitHash, branchTag string) []ScanResult {
 	var results []ScanResult
 
 	// Detect languages in the repository (tries GitHub API first, then filesystem)
@@ -42,7 +42,7 @@ func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath string) [
 
 	// Run each scanner
 	for _, scanner := range scannersToRun {
-		result := runScanner(config, scanner, repo, repoPath)
+		result := runScanner(config, scanner, repo, repoPath, commitHash, branchTag)
 		results = append(results, result)
 
 		if !result.Success && config.Global.FailFast {
@@ -303,7 +303,7 @@ func isScannerCompatible(scanner ScannerConfig, detected *DetectedLanguages) boo
 }
 
 // runScanner executes a single scanner against a repository
-func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, repoPath string) ScanResult {
+func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, repoPath, commitHash, branchTag string) ScanResult {
 	start := time.Now()
 
 	// Check required environment variables before doing any work
@@ -316,6 +316,8 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 			Error:        fmt.Errorf("required environment variable %s not set", missing),
 			Duration:     time.Since(start),
 			DojoScanType: scanner.DojoScanType,
+			CommitHash:   commitHash,
+			BranchTag:    branchTag,
 		}
 	}
 
@@ -345,6 +347,8 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 			Error:        fmt.Errorf("creating results directory: %w", err),
 			Duration:     time.Since(start),
 			DojoScanType: scanner.DojoScanType,
+			CommitHash:   commitHash,
+			BranchTag:    branchTag,
 		}
 	}
 
@@ -364,6 +368,8 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 				Error:        err,
 				Duration:     duration,
 				DojoScanType: scanner.DojoScanType,
+				CommitHash:   commitHash,
+				BranchTag:    branchTag,
 			}
 		}
 		if count > 0 {
@@ -378,6 +384,8 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 			Success:      true,
 			Duration:     duration,
 			DojoScanType: scanner.DojoScanType,
+			CommitHash:   commitHash,
+			BranchTag:    branchTag,
 		}
 	}
 
@@ -392,6 +400,8 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 			Error:        fmt.Errorf("scanner not found: %w", err),
 			Duration:     time.Since(start),
 			DojoScanType: scanner.DojoScanType,
+			CommitHash:   commitHash,
+			BranchTag:    branchTag,
 		}
 	}
 
@@ -426,6 +436,8 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 				Success:      true,
 				Duration:     duration,
 				DojoScanType: scanner.DojoScanType,
+				CommitHash:   commitHash,
+				BranchTag:    branchTag,
 			}
 		}
 
@@ -442,6 +454,8 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 			Error:        err,
 			Duration:     duration,
 			DojoScanType: scanner.DojoScanType,
+			CommitHash:   commitHash,
+			BranchTag:    branchTag,
 		}
 	}
 
@@ -453,5 +467,7 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 		Success:      true,
 		Duration:     duration,
 		DojoScanType: scanner.DojoScanType,
+		CommitHash:   commitHash,
+		BranchTag:    branchTag,
 	}
 }

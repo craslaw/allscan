@@ -4,10 +4,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"gopkg.in/yaml.v3"
 )
+
+// commitHashPattern matches valid git commit hashes (7-40 hex characters)
+var commitHashPattern = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)
 
 // Config holds the complete application configuration
 type Config struct {
@@ -44,7 +48,9 @@ type ScannerConfig struct {
 type RepositoryConfig struct {
 	URL      string   `yaml:"url"`
 	Branch   string   `yaml:"branch"`
-	Scanners []string `yaml:"scanners"` // Optional: specific scanners to run
+	Version  string   `yaml:"version,omitempty"`  // Tag name (e.g., "v1.2.3") - highest precedence
+	Commit   string   `yaml:"commit,omitempty"`   // Commit SHA (7-40 hex chars)
+	Scanners []string `yaml:"scanners"`           // Optional: specific scanners to run
 }
 
 // ScanResult holds the outcome of running a scanner on a repository
@@ -56,6 +62,30 @@ type ScanResult struct {
 	Error        error
 	Duration     time.Duration
 	DojoScanType string
+	CommitHash   string // Actual commit hash scanned (short format)
+	BranchTag    string // Branch or tag name (for DefectDojo)
+}
+
+// ValidateRepositoryConfig validates a repository configuration
+func ValidateRepositoryConfig(repo RepositoryConfig) error {
+	// URL is required
+	if repo.URL == "" {
+		return fmt.Errorf("repository URL is required")
+	}
+
+	// At least one of branch/version/commit must be specified
+	if repo.Branch == "" && repo.Version == "" && repo.Commit == "" {
+		return fmt.Errorf("at least one of branch, version, or commit must be specified")
+	}
+
+	// Validate commit hash format if provided
+	if repo.Commit != "" {
+		if !commitHashPattern.MatchString(repo.Commit) {
+			return fmt.Errorf("invalid commit hash %q: must be 7-40 hexadecimal characters", repo.Commit)
+		}
+	}
+
+	return nil
 }
 
 // loadConfig reads and parses the scanner configuration file
