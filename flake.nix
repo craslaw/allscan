@@ -26,6 +26,11 @@
     version: "v${info.pkg.version}"'') scannerInfo
         );
 
+        # Generate version output for scanner packages
+        scannerVersionOutput = pkgs.lib.concatStringsSep "\n" (
+          pkgs.lib.mapAttrsToList (name: info: ''echo "  ${name}: v${info.pkg.version}"'') scannerInfo
+        );
+
         scanners = (pkgs.lib.mapAttrsToList (name: info: info.pkg) scannerInfo) ++ [
           pkgs.git
         ];
@@ -80,6 +85,9 @@ ${scannerYamlEntries}
   # === END AUTO-GENERATED ===
 REPOS_EOF
             echo "📦 Updated repositories.yaml with scanner versions from flake.lock"
+            echo ""
+            echo "Scanner versions:"
+${scannerVersionOutput}
           '';
         };
 
