@@ -4,7 +4,7 @@ Declarative security scanning for git repos
 ## Architecture Overview
 ```
 ┌──────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│ repositories.yaml│────▶│   main.go        │────▶│  scan-results/  │
+│ repositories.yaml│────▶│  src/main.go     │────▶│  scan-results/  │
 │ (what to scan)   │     │ (orchestrator)   │     │  (JSON output)  │
 └──────────────────┘     └────────┬─────────┘     └────────┬────────┘
                                   │                        │
@@ -119,8 +119,8 @@ If adding new vendored dependencies, `nix build` will fail if it can't verify
 reproducibility of the dependency. To get the dependency hash and add to the
 nix.flake:
 1. `nix develop`
-2. `go mod tidy`  # Download dependencies and update go.sum
-3. `git add go.sum go.mod && git commit -m 'Add Go dependencies'`
+2. `cd src && go mod tidy`  # Download dependencies and update go.sum
+3. `git add src/go.sum src/go.mod && git commit -m 'Add Go dependencies'`
 4. `nix build 2>&1 | grep "got:" build.log`
 5. If step 4 fails, you may need to put a fake hash in the flake.nix so nix
    can lookup the dep and see that it needs to pull the correct one with a
@@ -130,8 +130,8 @@ nix.flake:
 orchestrator = pkgs.buildGoModule {
   pname = "scanner-orchestrator";
   version = "1.0.0";
-  src = ./.;
-  
+  src = ./src;
+
   # Use Nix's built-in fake hash
   vendorHash = pkgs.lib.fakeSha256;
 };
@@ -141,17 +141,28 @@ orchestrator = pkgs.buildGoModule {
 
 # File Structure
 ## Go
-allscan/                                                             
-├── main.go           (94 lines)   # CLI entry point                 
-├── config.go         (143 lines)  # Config structs and loading      
-├── scanner.go        (209 lines)  # Scanner execution logic         
-├── upload.go         (218 lines)  # DefectDojo upload logic         
-├── summary.go        (157 lines)  # Colorful summary printing       
-└── parsers/                                                         
-...├── parser.go     (68 lines)   # Interfaces and registry         
-...├── sca.go        (112 lines)  # GrypeParser, OSVScannerParser   
-...├── sast.go       (53 lines)   # GosecParser                     
-...└── secrets.go    (39 lines)   # GitleaksParser
+allscan/
+├── src/                          # All Go source code
+│   ├── main.go                   # CLI entry point
+│   ├── config.go                 # Config structs and loading
+│   ├── scanner.go                # Scanner execution logic
+│   ├── upload.go                 # DefectDojo upload logic
+│   ├── summary.go                # Colorful summary printing
+│   ├── language.go               # Language detection
+│   ├── go.mod                    # Go module definition
+│   ├── go.sum                    # Go dependency checksums
+│   ├── *_test.go                 # Unit tests
+│   └── parsers/                  # Scanner result parsers
+│       ├── parser.go             # Interfaces and registry
+│       ├── sca.go                # GrypeParser, OSVScannerParser
+│       ├── sast.go               # GosecParser
+│       ├── secrets.go            # GitleaksParser
+│       ├── binary.go             # BinaryDetectorParser
+│       ├── scorecard.go          # ScorecardParser
+│       └── *_test.go             # Parser unit tests
+├── scanners.yaml                 # Scanner definitions
+├── repositories.yaml             # Repository targets
+└── flake.nix                     # Nix build configuration
 
 ## Nix
 The Nix flake manages:

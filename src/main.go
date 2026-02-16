@@ -298,8 +298,8 @@ func runScans(config *Config) []ScanResult {
 
 func main() {
 	// Parse command line flags
-	configPath := flag.String("config", "scanners.yaml", "Path to config file")
-	reposPath := flag.String("repos", "repositories.yaml", "Path to repositories config file")
+	configPath := flag.String("config", "../scanners.yaml", "Path to config file")
+	reposPath := flag.String("repos", "../repositories.yaml", "Path to repositories config file")
 	dryRun := flag.Bool("dry-run", false, "Print what would be done without executing")
 	local := flag.Bool("local", false, "Scan current directory instead of cloning repos (skips upload)")
 	flag.Parse()

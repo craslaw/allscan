@@ -33,7 +33,7 @@
         orchestrator = pkgs.buildGoModule {
           pname = "vuln-scanner-orchestrator";
           version = "1.0.0";
-          src = ./.;
+          src = ./src;
           vendorHash = "sha256-g+yaVIx4jxpAQ/+WrGKxhVeliYx7nLQe/zsGpxV4Fn4=";
 
           # Make scanners available at build time
