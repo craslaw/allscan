@@ -70,6 +70,14 @@ func uploadSingleResult(config *Config, result ScanResult, authToken string) err
 		"do_not_reactivate":   "true",
 	}
 
+	// Add version information if available
+	if result.CommitHash != "" {
+		fields["commit_hash"] = result.CommitHash
+	}
+	if result.BranchTag != "" {
+		fields["branch_tag"] = result.BranchTag
+	}
+
 	// Build upload request using the Fluent Builder pattern
 	builder := BuildUploadRequest().
 		WithFile(file, filepath.Base(result.OutputPath)).

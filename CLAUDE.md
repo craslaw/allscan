@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build and Run Commands
 
+**IMPORTANT: Most commands run from the project root** (where `scanners.yaml` and `repositories.yaml` are located).
+
 ```bash
 # Enter development shell (required for scanner binaries)
 nix develop
@@ -12,10 +14,10 @@ nix develop
 nix run
 
 # Run in local mode (scan current directory, no upload)
-go run . --local
+nix run -- --local
 
 # Dry run (show what would be executed without running)
-go run . --dry-run
+nix run -- --dry-run
 
 # Build the Go binary
 nix build
@@ -23,8 +25,11 @@ nix build
 # Update scanner versions
 nix flake update
 
-# Update Go dependencies (see README.md for vendorHash workflow)
-go mod tidy
+# Development with go run (must specify config paths)
+cd src && go run . --local --config ../scanners.yaml --repos ../repositories.yaml
+
+# Update Go dependencies (run from src/ where go.mod is located)
+cd src && go mod tidy
 ```
 
 ## Architecture
@@ -39,15 +44,17 @@ Allscan is a declarative security scanning orchestrator written in Go and manage
 5. Optionally upload to DefectDojo (requires `VULN_MGMT_API_TOKEN` env var)
 
 **Key Files:**
-- `main.go` - CLI entry point, handles `--local`/`--dry-run` flags
-- `config.go` - Config structs and YAML loading
-- `scanner.go` - Scanner execution with timeout handling
-- `upload.go` - DefectDojo upload using fluent builder pattern
-- `summary.go` - Colorful terminal output with ANSI codes
-- `parsers/` - Interface-based parser system for scanner outputs
+- `src/main.go` - CLI entry point, handles `--local`/`--dry-run` flags
+- `src/config.go` - Config structs and YAML loading
+- `src/scanner.go` - Scanner execution with timeout handling
+- `src/upload.go` - DefectDojo upload using fluent builder pattern
+- `src/summary.go` - Colorful terminal output with ANSI codes
+- `src/parsers/` - Interface-based parser system for scanner outputs
+- `scanners.yaml` - Scanner definitions (in root)
+- `repositories.yaml` - Target repositories (in root)
 
 **Parser System:**
-- `parsers/parser.go` - `ResultParser` interface and registry
+- `src/parsers/parser.go` - `ResultParser` interface and registry
 - Parsers implement `Parse()`, `Type()` (SCA/SAST/Secrets), `Icon()`, `Name()`
 - Registry maps scanner names to implementations via `parsers.Get()`
 
@@ -60,12 +67,12 @@ When adding a new scanner, you MUST complete ALL of the following steps:
    - If not in nixpkgs: create a `buildNpmPackage`, `buildGoModule`, or appropriate derivation
    - Scanner binaries MUST be installed declaratively via Nix, never manually
 
-2. **Create parser** (`parsers/`):
+2. **Create parser** (`src/parsers/`):
    - Create parser struct implementing `ResultParser` interface
    - Implement `Parse()`, `Type()`, `Icon()`, `Name()` methods
-   - Register in `registry` map in `parsers/parser.go`
+   - Register in `registry` map in `src/parsers/parser.go`
 
-3. **Write parser tests** (`parsers/<type>_test.go`):
+3. **Write parser tests** (`src/parsers/<type>_test.go`):
    - Write tests BEFORE implementing the parser (TDD)
    - Cover: empty input (no findings), multiple findings with mixed severities, boundary values for severity mappings, invalid JSON (error case)
    - Use table-driven tests with `t.Run()` subtests
@@ -109,31 +116,58 @@ new-scanner = pkgs.buildNpmPackage {
 - `{{output}}` template is replaced with output file path
 - `args_local` overrides `args` in `--local` mode (e.g., gitleaks respects .gitignore locally)
 
+## Documentation Maintenance
+
+**IMPORTANT: When making changes to the repository, you MUST keep documentation synchronized.**
+
+**Update README.md whenever you make:**
+
+1. **File structure changes:**
+   - Moving, renaming, or reorganizing source files
+   - Adding new directories or changing the project layout
+   - Changes to where configuration files are located
+   - Example: Moving Go code to `src/` directory requires updating file paths in README.md
+
+2. **Workflow changes that affect human users:**
+   - Changes to build commands or how to run the program
+   - New command-line flags or options
+   - Changes to environment variable requirements
+   - Updates to the development setup process
+   - Changes to how dependencies are managed
+   - Example: If `go run .` changes to `cd src && go run .`, update README.md
+
+3. **Architecture or design changes:**
+   - Adding new scanners to the compatibility matrix
+   - Changes to how scanners are configured or executed
+   - Updates to the core workflow or processing pipeline
+
+**Always update both CLAUDE.md and README.md together** - CLAUDE.md is for AI agents, README.md is for human users. They should reflect the same current state of the project.
+
 ## Testing
 
 **Running Tests:**
 
 ```bash
-# Run all tests
-go test ./...
+# Run all tests (from src/ directory)
+cd src && go test ./...
 
 # Verbose output (shows individual test case names)
-go test -v ./...
+cd src && go test -v ./...
 
 # Run only parser tests
-go test -v ./parsers/...
+cd src && go test -v ./parsers/...
 
 # Run only root package tests (config, scanner, language, upload)
-go test -v .
+cd src && go test -v .
 
 # Run a specific test function
-go test -v -run TestGrypeParser_Parse ./parsers/...
+cd src && go test -v -run TestGrypeParser_Parse ./parsers/...
 
 # Run a specific subtest
-go test -v -run TestGrypeParser_Parse/mixed_severities ./parsers/...
+cd src && go test -v -run TestGrypeParser_Parse/mixed_severities ./parsers/...
 
 # Show test coverage percentage
-go test -cover ./...
+cd src && go test -cover ./...
 ```
 
 **Test-Driven Development (TDD) Workflow:**
@@ -141,17 +175,17 @@ go test -cover ./...
 When adding new functions or features, follow this workflow:
 
 1. **Write a failing test first** in the appropriate `*_test.go` file using table-driven tests
-2. **Run the test** to confirm it fails: `go test -v -run TestNewThing ./...`
+2. **Run the test** to confirm it fails: `cd src && go test -v -run TestNewThing ./...`
 3. **Write the minimum code** to make the test pass
-4. **Run tests again** to confirm they pass: `go test -v ./...`
+4. **Run tests again** to confirm they pass: `cd src && go test -v ./...`
 5. **Refactor** while keeping tests green
 
 **Test Conventions:**
 
-- Test files: `foo_test.go` next to `foo.go` (parsers tests in `parsers/` dir)
+- Test files: `foo_test.go` next to `foo.go` in `src/` (parsers tests in `src/parsers/` dir)
 - Test functions: `TestFunctionName(t *testing.T)`
 - Use table-driven tests with `t.Run()` subtests for multiple cases
 - Use `t.TempDir()` for tests that need temporary filesystem access
 - Use `t.Setenv()` for tests that check environment variables
 - Standard `testing` package only -- no external test libraries
-- Always run `go test ./...` after any code changes to catch regressions
+- Always run `cd src && go test ./...` after any code changes to catch regressions

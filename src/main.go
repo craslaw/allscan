@@ -78,32 +78,165 @@ func isValidCachedRepo(repoPath, expectedURL string) bool {
 	return actualURL == expectedNormalized
 }
 
+// getCommitHash returns the short commit hash of HEAD for a repository
+func getCommitHash(repoPath string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
+	cmd.Dir = repoPath
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git rev-parse failed: %w", err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// validateVersionCommit checks if a version tag points to the expected commit
+// and prints a warning if they don't match
+func validateVersionCommit(repoPath, version, expectedCommit string) {
+	// Get the commit hash that the tag points to
+	cmd := exec.Command("git", "rev-list", "-n", "1", "--abbrev-commit", "tags/"+version)
+	cmd.Dir = repoPath
+	output, err := cmd.Output()
+	if err != nil {
+		// Tag might not exist or other git error - skip validation
+		return
+	}
+
+	tagCommit := strings.TrimSpace(string(output))
+	// Compare with expected commit (handle both short and full hashes)
+	if !strings.HasPrefix(tagCommit, expectedCommit) && !strings.HasPrefix(expectedCommit, tagCommit) {
+		log.Printf("%s%s⚠️  WARNING: Tag %s points to %s, but expected %s%s",
+			ColorBold, ColorYellow, version, tagCommit, expectedCommit, ColorReset)
+	}
+}
+
 // cloneRepository performs a shallow clone of the target repository, or updates an existing cached clone
-func cloneRepository(config *Config, repo RepositoryConfig) (string, error) {
+// Returns: repoPath, commitHash (short), branchTag (branch or tag name), error
+func cloneRepository(config *Config, repo RepositoryConfig) (repoPath, commitHash, branchTag string, err error) {
 	// Extract repo name from URL
 	parts := strings.Split(repo.URL, "/")
 	repoName := parts[len(parts)-2] + "/" + strings.TrimSuffix(parts[len(parts)-1], ".git")
 
-	repoPath := filepath.Join(config.Global.Workspace, repoName)
+	repoPath = filepath.Join(config.Global.Workspace, repoName)
 
+	// Determine the ref to use (precedence: version > commit > branch)
+	var ref string
+	if repo.Version != "" {
+		ref = repo.Version
+		branchTag = repo.Version
+	} else if repo.Commit != "" {
+		ref = repo.Commit
+		branchTag = repo.Commit
+	} else {
+		ref = repo.Branch
+		branchTag = repo.Branch
+		if ref == "" {
+			ref = "main"
+			branchTag = "main"
+		}
+	}
+
+	// Version tag checkout - use git clone --branch (works with tags)
+	if repo.Version != "" {
+		// Remove existing directory for fresh clone
+		if err := os.RemoveAll(repoPath); err != nil {
+			log.Printf("    ⚠️  Couldn't remove old repository: %v", err)
+		}
+
+		log.Printf("  📥 Cloning %s (tag: %s)...", repoName, repo.Version)
+		cmd := exec.Command("git", "clone", "--depth=1", "--branch", repo.Version, repo.URL, repoPath)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return "", "", "", fmt.Errorf("git clone failed: %w\n%s", err, output)
+		}
+
+		// Get the commit hash
+		commitHash, err = getCommitHash(repoPath)
+		if err != nil {
+			return "", "", "", err
+		}
+
+		// Validate version/commit if both are specified
+		if repo.Commit != "" {
+			validateVersionCommit(repoPath, repo.Version, repo.Commit)
+		}
+
+		return repoPath, commitHash, branchTag, nil
+	}
+
+	// Commit checkout - requires fetch then checkout
+	if repo.Commit != "" {
+		// Remove existing directory for fresh clone
+		if err := os.RemoveAll(repoPath); err != nil {
+			log.Printf("    ⚠️  Couldn't remove old repository: %v", err)
+		}
+
+		log.Printf("  📥 Cloning %s (commit: %s)...", repoName, repo.Commit)
+
+		// Initialize empty repo and add remote
+		if err := os.MkdirAll(repoPath, 0750); err != nil {
+			return "", "", "", fmt.Errorf("creating directory: %w", err)
+		}
+
+		initCmd := exec.Command("git", "init")
+		initCmd.Dir = repoPath
+		if output, err := initCmd.CombinedOutput(); err != nil {
+			return "", "", "", fmt.Errorf("git init failed: %w\n%s", err, output)
+		}
+
+		remoteCmd := exec.Command("git", "remote", "add", "origin", repo.URL)
+		remoteCmd.Dir = repoPath
+		if output, err := remoteCmd.CombinedOutput(); err != nil {
+			return "", "", "", fmt.Errorf("git remote add failed: %w\n%s", err, output)
+		}
+
+		// Fetch the specific commit
+		fetchCmd := exec.Command("git", "fetch", "--depth=1", "origin", repo.Commit)
+		fetchCmd.Dir = repoPath
+		if output, err := fetchCmd.CombinedOutput(); err != nil {
+			return "", "", "", fmt.Errorf("git fetch failed: %w\n%s", err, output)
+		}
+
+		// Checkout the commit
+		checkoutCmd := exec.Command("git", "checkout", "FETCH_HEAD")
+		checkoutCmd.Dir = repoPath
+		if output, err := checkoutCmd.CombinedOutput(); err != nil {
+			return "", "", "", fmt.Errorf("git checkout failed: %w\n%s", err, output)
+		}
+
+		// Get the actual commit hash (may differ from short hash provided)
+		commitHash, err = getCommitHash(repoPath)
+		if err != nil {
+			return "", "", "", err
+		}
+
+		return repoPath, commitHash, branchTag, nil
+	}
+
+	// Branch checkout (existing behavior)
 	// Check if repo already exists with correct remote
 	if isValidCachedRepo(repoPath, repo.URL) {
-		log.Printf("  📦 Updating cached repo: %s (branch: %s)...", repoName, repo.Branch)
+		log.Printf("  📦 Updating cached repo: %s (branch: %s)...", repoName, ref)
 
 		// Fetch latest changes
-		fetchCmd := exec.Command("git", "fetch", "origin", repo.Branch, "--depth=1")
+		fetchCmd := exec.Command("git", "fetch", "origin", ref, "--depth=1")
 		fetchCmd.Dir = repoPath
 		if _, err := fetchCmd.CombinedOutput(); err != nil {
 			log.Printf("    ⚠️  Fetch failed, will re-clone: %v", err)
 			// Fall through to fresh clone
 		} else {
 			// Reset to fetched branch
-			resetCmd := exec.Command("git", "reset", "--hard", "origin/"+repo.Branch)
+			resetCmd := exec.Command("git", "reset", "--hard", "origin/"+ref)
 			resetCmd.Dir = repoPath
 			if output, err := resetCmd.CombinedOutput(); err != nil {
-				return "", fmt.Errorf("git reset failed: %w\n%s", err, output)
+				return "", "", "", fmt.Errorf("git reset failed: %w\n%s", err, output)
 			}
-			return repoPath, nil
+
+			// Get the commit hash
+			commitHash, err = getCommitHash(repoPath)
+			if err != nil {
+				return "", "", "", err
+			}
+
+			return repoPath, commitHash, branchTag, nil
 		}
 	}
 
@@ -113,13 +246,19 @@ func cloneRepository(config *Config, repo RepositoryConfig) (string, error) {
 	}
 
 	// Fresh clone
-	log.Printf("  📥 Cloning %s (branch: %s)...", repoName, repo.Branch)
-	cmd := exec.Command("git", "clone", "--depth=1", "--branch", repo.Branch, repo.URL, repoPath)
+	log.Printf("  📥 Cloning %s (branch: %s)...", repoName, ref)
+	cmd := exec.Command("git", "clone", "--depth=1", "--branch", ref, repo.URL, repoPath)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("git clone failed: %w\n%s", err, output)
+		return "", "", "", fmt.Errorf("git clone failed: %w\n%s", err, output)
 	}
 
-	return repoPath, nil
+	// Get the commit hash
+	commitHash, err = getCommitHash(repoPath)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	return repoPath, commitHash, branchTag, nil
 }
 
 // runScans clones/updates repositories and runs scanners against them
@@ -129,15 +268,21 @@ func runScans(config *Config) []ScanResult {
 	for _, repo := range config.Repositories {
 		log.Printf("\n📦 Processing repository: %s", repo.URL)
 
+		// Validate repository config
+		if err := ValidateRepositoryConfig(repo); err != nil {
+			log.Printf("❌ Invalid repository config for %s: %v", repo.URL, err)
+			continue
+		}
+
 		// Clone or update repository
-		repoPath, err := cloneRepository(config, repo)
+		repoPath, commitHash, branchTag, err := cloneRepository(config, repo)
 		if err != nil {
 			log.Printf("❌ Failed to clone %s: %v", repo.URL, err)
 			continue
 		}
 
 		// Run scanners on this repo
-		repoResults := runScannersOnRepo(config, repo, repoPath)
+		repoResults := runScannersOnRepo(config, repo, repoPath, commitHash, branchTag)
 		results = append(results, repoResults...)
 
 		// Check for fail-fast across all results

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -241,6 +242,143 @@ repositories:
 		_, err := loadRepositories("/nonexistent/repos.yaml")
 		if err == nil {
 			t.Error("loadRepositories() expected error for non-existent file, got nil")
+		}
+	})
+}
+
+func TestValidateRepositoryConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		repo    RepositoryConfig
+		wantErr bool
+	}{
+		// Positive cases
+		{
+			name:    "valid branch only",
+			repo:    RepositoryConfig{URL: "https://github.com/org/repo", Branch: "main"},
+			wantErr: false,
+		},
+		{
+			name:    "valid version only",
+			repo:    RepositoryConfig{URL: "https://github.com/org/repo", Version: "v1.0.0"},
+			wantErr: false,
+		},
+		{
+			name:    "valid commit only (short)",
+			repo:    RepositoryConfig{URL: "https://github.com/org/repo", Commit: "abc1234"},
+			wantErr: false,
+		},
+		{
+			name:    "valid commit only (full)",
+			repo:    RepositoryConfig{URL: "https://github.com/org/repo", Commit: "abc1234def5678abc1234def5678abc1234def56"},
+			wantErr: false,
+		},
+		{
+			name:    "valid version and commit",
+			repo:    RepositoryConfig{URL: "https://github.com/org/repo", Version: "v1.0.0", Commit: "abc1234"},
+			wantErr: false,
+		},
+		{
+			name:    "valid all fields",
+			repo:    RepositoryConfig{URL: "https://github.com/org/repo", Branch: "main", Version: "v1.0.0", Commit: "abc1234"},
+			wantErr: false,
+		},
+		// Negative cases
+		{
+			name:    "missing URL",
+			repo:    RepositoryConfig{Branch: "main"},
+			wantErr: true,
+		},
+		{
+			name:    "missing all refs",
+			repo:    RepositoryConfig{URL: "https://github.com/org/repo"},
+			wantErr: true,
+		},
+		{
+			name:    "commit too short",
+			repo:    RepositoryConfig{URL: "https://github.com/org/repo", Commit: "abc"},
+			wantErr: true,
+		},
+		{
+			name:    "commit too long",
+			repo:    RepositoryConfig{URL: "https://github.com/org/repo", Commit: strings.Repeat("a", 41)},
+			wantErr: true,
+		},
+		{
+			name:    "commit invalid chars",
+			repo:    RepositoryConfig{URL: "https://github.com/org/repo", Commit: "xyz1234"},
+			wantErr: true,
+		},
+		{
+			name:    "commit with special chars",
+			repo:    RepositoryConfig{URL: "https://github.com/org/repo", Commit: "abc-123"},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRepositoryConfig(tt.repo)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateRepositoryConfig() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLoadRepositoriesWithVersions(t *testing.T) {
+	t.Run("parse version and commit fields", func(t *testing.T) {
+		dir := t.TempDir()
+		repoPath := filepath.Join(dir, "repositories.yaml")
+		yaml := `
+repositories:
+  - url: "https://github.com/org/repo1"
+    version: "v1.2.3"
+  - url: "https://github.com/org/repo2"
+    commit: "abc1234"
+  - url: "https://github.com/org/repo3"
+    version: "v2.0.0"
+    commit: "def5678"
+  - url: "https://github.com/org/repo4"
+    branch: "develop"
+`
+		os.WriteFile(repoPath, []byte(yaml), 0644)
+
+		repos, err := loadRepositories(repoPath)
+		if err != nil {
+			t.Fatalf("loadRepositories() error = %v", err)
+		}
+		if len(repos) != 4 {
+			t.Fatalf("len(repos) = %d, want 4", len(repos))
+		}
+
+		// Check version only
+		if repos[0].Version != "v1.2.3" {
+			t.Errorf("repos[0].Version = %q, want %q", repos[0].Version, "v1.2.3")
+		}
+		if repos[0].Commit != "" {
+			t.Errorf("repos[0].Commit = %q, want empty", repos[0].Commit)
+		}
+
+		// Check commit only
+		if repos[1].Commit != "abc1234" {
+			t.Errorf("repos[1].Commit = %q, want %q", repos[1].Commit, "abc1234")
+		}
+		if repos[1].Version != "" {
+			t.Errorf("repos[1].Version = %q, want empty", repos[1].Version)
+		}
+
+		// Check both version and commit
+		if repos[2].Version != "v2.0.0" {
+			t.Errorf("repos[2].Version = %q, want %q", repos[2].Version, "v2.0.0")
+		}
+		if repos[2].Commit != "def5678" {
+			t.Errorf("repos[2].Commit = %q, want %q", repos[2].Commit, "def5678")
+		}
+
+		// Check branch only
+		if repos[3].Branch != "develop" {
+			t.Errorf("repos[3].Branch = %q, want %q", repos[3].Branch, "develop")
 		}
 	})
 }
