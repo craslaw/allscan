@@ -18,6 +18,81 @@ import (
 
 const resultsMaxAge = 7 * 24 * time.Hour // 7 days
 
+// resolveFromLsRemote parses the output of "git ls-remote --tags" and returns a RepositoryConfig
+// for the latest tag. For annotated tags the ^{} dereferenced commit hash is used.
+// Falls back to branch "main" if no tags are present in the output.
+func resolveFromLsRemote(url string, output []byte) RepositoryConfig {
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+	// First pass: find the first non-dereference tag and build a map of
+	// tag name → commit hash so annotated tag ^{} lines can override.
+	type tagEntry struct {
+		name string
+		hash string
+	}
+	var selected *tagEntry
+	derefHashes := make(map[string]string) // tag name → dereferenced commit hash
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) != 2 {
+			continue
+		}
+		hash := parts[0]
+		ref := parts[1]
+
+		if base, ok := strings.CutSuffix(ref, "^{}"); ok {
+			// Dereferenced commit for an annotated tag — record it
+			tagName := strings.TrimPrefix(base, "refs/tags/")
+			derefHashes[tagName] = hash
+			continue
+		}
+
+		if !strings.HasPrefix(ref, "refs/tags/") {
+			continue
+		}
+
+		// First non-dereference tag is the newest (list is sorted newest-first)
+		if selected == nil {
+			tagName := strings.TrimPrefix(ref, "refs/tags/")
+			selected = &tagEntry{name: tagName, hash: hash}
+		}
+	}
+
+	if selected == nil {
+		log.Printf("ℹ️  No tags found for %s, using branch main", url)
+		return RepositoryConfig{URL: url, Branch: "main"}
+	}
+
+	// Prefer the dereferenced commit hash for annotated tags
+	commitHash := selected.hash
+	if deref, ok := derefHashes[selected.name]; ok {
+		commitHash = deref
+	}
+	shortHash := commitHash
+	if len(shortHash) > 7 {
+		shortHash = shortHash[:7]
+	}
+
+	log.Printf("🏷️  Resolved %s → %s (%s)", url, selected.name, shortHash)
+	return RepositoryConfig{URL: url, Version: selected.name, Commit: shortHash}
+}
+
+// resolveRepoTarget resolves a repository URL to a RepositoryConfig by detecting
+// the latest tagged release via git ls-remote. Falls back to branch "main" if no tags exist.
+func resolveRepoTarget(url string) RepositoryConfig {
+	cmd := exec.Command("git", "ls-remote", "--tags", "--sort=-v:refname", url)
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("⚠️  Could not list tags for %s: %v, using branch main", url, err)
+		return RepositoryConfig{URL: url, Branch: "main"}
+	}
+	return resolveFromLsRemote(url, output)
+}
+
 // checkAllRequiredEnv checks required environment variables for all enabled scanners.
 // Returns a map of scanner name -> missing env var name for any that are missing.
 func checkAllRequiredEnv(config *Config) map[string]string {
@@ -302,6 +377,7 @@ func main() {
 	reposPath := flag.String("repos", "repositories.yaml", "Path to repositories config file")
 	dryRun := flag.Bool("dry-run", false, "Print what would be done without executing")
 	local := flag.Bool("local", false, "Scan current directory instead of cloning repos (skips upload)")
+	repo := flag.String("repo", "", "Scan a single repository by URL (uses latest tagged release if available)")
 	flag.Parse()
 
 	// Load configuration
@@ -328,12 +404,17 @@ func main() {
 		return
 	}
 
-	// Remote mode: load and scan repositories
-	repositories, err := loadRepositories(*reposPath)
-	if err != nil {
-		log.Fatalf("Failed to load repositories: %v", err)
+	// Remote mode: load repositories from file or resolve single --repo target
+	if *repo != "" {
+		target := resolveRepoTarget(*repo)
+		config.Repositories = []RepositoryConfig{target}
+	} else {
+		repositories, err := loadRepositories(*reposPath)
+		if err != nil {
+			log.Fatalf("Failed to load repositories: %v", err)
+		}
+		config.Repositories = repositories
 	}
-	config.Repositories = repositories
 
 	log.Printf("🔍 Vulnerability Scanner Orchestrator")
 	log.Printf("Config: %s", *configPath)

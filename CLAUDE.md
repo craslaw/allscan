@@ -13,6 +13,9 @@ nix develop
 # Run the orchestrator (scans repositories defined in repositories.yaml)
 nix run
 
+# Scan a single repository (auto-detects latest tagged release)
+nix run -- --repo https://github.com/owner/repo
+
 # Run in local mode (scan current directory, no upload)
 nix run -- --local
 
@@ -44,7 +47,7 @@ Allscan is a declarative security scanning orchestrator written in Go and manage
 5. Optionally upload to DefectDojo (requires `VULN_MGMT_API_TOKEN` env var)
 
 **Key Files:**
-- `src/main.go` - CLI entry point, handles `--local`/`--dry-run` flags
+- `src/main.go` - CLI entry point, handles `--local`/`--dry-run`/`--repo` flags
 - `src/config.go` - Config structs and YAML loading
 - `src/scanner.go` - Scanner execution with timeout handling
 - `src/upload.go` - DefectDojo upload using fluent builder pattern

@@ -143,6 +143,79 @@ func TestValidateVersionCommit(t *testing.T) {
 	})
 }
 
+func TestResolveFromLsRemote(t *testing.T) {
+	const url = "https://github.com/example/repo"
+
+	tests := []struct {
+		name          string
+		output        string
+		wantVersion   string
+		wantCommit    string
+		wantBranch    string
+	}{
+		{
+			name: "lightweight tags picks newest tag",
+			// Lightweight tags: hash is the commit hash directly
+			output: strings.Join([]string{
+				"aabbccdd11223344556677889900aabbccdd1122  refs/tags/v2.0.0",
+				"11223344556677889900aabbccdd112233445566  refs/tags/v1.0.0",
+			}, "\n"),
+			wantVersion: "v2.0.0",
+			wantCommit:  "aabbccd", // first 7 chars
+		},
+		{
+			name: "annotated tags uses dereferenced commit hash",
+			// Annotated tags: tag object hash on first line, ^{} line has actual commit hash
+			output: strings.Join([]string{
+				"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  refs/tags/v3.0.0",
+				"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  refs/tags/v3.0.0^{}",
+				"cccccccccccccccccccccccccccccccccccccccc  refs/tags/v2.0.0",
+				"dddddddddddddddddddddddddddddddddddddddd  refs/tags/v2.0.0^{}",
+			}, "\n"),
+			wantVersion: "v3.0.0",
+			wantCommit:  "bbbbbbb", // first 7 chars of the ^{} commit, not the tag object
+		},
+		{
+			name:       "empty output falls back to main",
+			output:     "",
+			wantBranch: "main",
+		},
+		{
+			name:       "no tags in output falls back to main",
+			output:     "aabbccdd11223344556677889900aabbccdd1122  refs/heads/main",
+			wantBranch: "main",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := resolveFromLsRemote(url, []byte(tc.output))
+
+			if result.URL != url {
+				t.Errorf("URL = %q, want %q", result.URL, url)
+			}
+			if tc.wantBranch != "" {
+				if result.Branch != tc.wantBranch {
+					t.Errorf("Branch = %q, want %q", result.Branch, tc.wantBranch)
+				}
+				if result.Version != "" {
+					t.Errorf("Version = %q, want empty when falling back to branch", result.Version)
+				}
+			} else {
+				if result.Version != tc.wantVersion {
+					t.Errorf("Version = %q, want %q", result.Version, tc.wantVersion)
+				}
+				if result.Commit != tc.wantCommit {
+					t.Errorf("Commit = %q, want %q", result.Commit, tc.wantCommit)
+				}
+				if result.Branch != "" {
+					t.Errorf("Branch = %q, want empty when version is set", result.Branch)
+				}
+			}
+		})
+	}
+}
+
 func TestIsValidCachedRepo(t *testing.T) {
 	t.Run("returns false for non-existent directory", func(t *testing.T) {
 		if isValidCachedRepo("/nonexistent/path", "https://github.com/org/repo") {
