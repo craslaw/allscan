@@ -68,6 +68,7 @@ All commands must be run from the project root directory.
 3. Run the orchestrator:
    ```bash
    nix run                    # Scan repositories from repositories.yaml
+   nix run -- --repo https://github.com/owner/repo  # Scan a single repo (auto-detects latest release)
    ```
 
 ## Development Mode
