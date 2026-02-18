@@ -22,8 +22,7 @@
 
         # Generate YAML entries for scanner packages
         scannerYamlEntries = pkgs.lib.concatStringsSep "\n" (
-          pkgs.lib.mapAttrsToList (name: info: ''  - url: "${info.url}"
-    version: "v${info.pkg.version}"'') scannerInfo
+          pkgs.lib.mapAttrsToList (name: info: "  - url: \"${info.url}\"\n    version: \"v${info.pkg.version}\"") scannerInfo
         );
 
         # Generate version output for scanner packages

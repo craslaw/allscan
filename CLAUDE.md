@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build and Run Commands
 
+**IMPORTANT: Most commands run from the project root** (where `scanners.yaml` and `repositories.yaml` are located).
+
 ```bash
 # Enter development shell (required for scanner binaries)
 nix develop
@@ -12,10 +14,10 @@ nix develop
 nix run
 
 # Run in local mode (scan current directory, no upload)
-cd src && go run . --local
+nix run -- --local
 
 # Dry run (show what would be executed without running)
-cd src && go run . --dry-run
+nix run -- --dry-run
 
 # Build the Go binary
 nix build
@@ -23,7 +25,10 @@ nix build
 # Update scanner versions
 nix flake update
 
-# Update Go dependencies (see README.md for vendorHash workflow)
+# Development with go run (must specify config paths)
+cd src && go run . --local --config ../scanners.yaml --repos ../repositories.yaml
+
+# Update Go dependencies (run from src/ where go.mod is located)
 cd src && go mod tidy
 ```
 

@@ -49,9 +49,44 @@ Allscan automatically selects scanners based on detected repository languages. S
 - ***Universal*** - Runs on all repositories regardless of detected language
 
 # Use
-1. `nix develop`
-2. `export VULN_MGMT_API_TOKEN="your-defectdojo-token"`
-3. `nix run`
+
+All commands must be run from the project root directory.
+
+## Running Allscan
+
+1. Enter the development shell (provides scanner binaries):
+   ```bash
+   nix develop
+   ```
+
+2. (Optional) Set DefectDojo API token for vulnerability upload:
+   ```bash
+   export VULN_MGMT_API_TOKEN="your-defectdojo-token"
+   export GITHUB_TOKEN="your-scorecard-token"
+   ```
+
+3. Run the orchestrator:
+   ```bash
+   nix run                    # Scan repositories from repositories.yaml
+   ```
+
+## Development Mode
+
+For local development and testing:
+
+```bash
+# Scan current directory (no cloning or upload)
+nix run -- --local
+
+# Dry run (show what would be executed)
+nix run -- --dry-run
+
+# Run tests (must run from src/ where go.mod is located)
+cd src && go test ./...
+
+# Development with go run (if not using nix run)
+cd src && go run . --local --config ../scanners.yaml --repos ../repositories.yaml
+```
 
 ## Dependency Management & Version Pinning
 
