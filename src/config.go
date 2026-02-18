@@ -66,6 +66,15 @@ type ScanResult struct {
 	BranchTag    string // Branch or tag name (for DefectDojo)
 }
 
+// RepoScanContext bundles scan results with the language and scanner metadata
+// needed to render a per-repo coverage matrix in the summary.
+type RepoScanContext struct {
+	RepoURL   string
+	Results   []ScanResult
+	Languages *DetectedLanguages
+	Scanners  []ScannerConfig // scanners selected to run on this repo
+}
+
 // ValidateRepositoryConfig validates a repository configuration
 func ValidateRepositoryConfig(repo RepositoryConfig) error {
 	// URL is required
