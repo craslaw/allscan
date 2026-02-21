@@ -76,6 +76,76 @@ func TestParseGitHubURL(t *testing.T) {
 	}
 }
 
+func TestPercentages(t *testing.T) {
+	tests := []struct {
+		name       string
+		detected   *DetectedLanguages
+		wantNil    bool
+		wantLangs  map[string]float64 // expected percentages (approximate)
+	}{
+		{
+			name:    "nil receiver",
+			detected: nil,
+			wantNil: true,
+		},
+		{
+			name:     "empty FileCounts",
+			detected: &DetectedLanguages{FileCounts: map[string]int{}},
+			wantNil:  true,
+		},
+		{
+			name: "single language",
+			detected: &DetectedLanguages{
+				Languages:  []string{"go"},
+				FileCounts: map[string]int{"go": 500},
+			},
+			wantLangs: map[string]float64{"go": 100.0},
+		},
+		{
+			name: "two equal languages",
+			detected: &DetectedLanguages{
+				Languages:  []string{"go", "python"},
+				FileCounts: map[string]int{"go": 100, "python": 100},
+			},
+			wantLangs: map[string]float64{"go": 50.0, "python": 50.0},
+		},
+		{
+			name: "skewed distribution",
+			detected: &DetectedLanguages{
+				Languages:  []string{"go", "shell"},
+				FileCounts: map[string]int{"go": 9999, "shell": 1},
+			},
+			wantLangs: map[string]float64{"go": 99.99, "shell": 0.01},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.detected.Percentages()
+			if tt.wantNil {
+				if got != nil {
+					t.Errorf("expected nil, got %v", got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatal("expected non-nil percentages")
+			}
+			for lang, want := range tt.wantLangs {
+				pct, ok := got[lang]
+				if !ok {
+					t.Errorf("missing language %q", lang)
+					continue
+				}
+				diff := pct - want
+				if diff < -0.1 || diff > 0.1 {
+					t.Errorf("Percentages()[%q] = %.2f, want ~%.2f", lang, pct, want)
+				}
+			}
+		})
+	}
+}
+
 func TestHasLanguage(t *testing.T) {
 	detected := &DetectedLanguages{
 		Languages: []string{"go", "python", "javascript"},

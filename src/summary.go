@@ -203,20 +203,44 @@ func printCoverageMatrix(ctx RepoScanContext) {
 		return
 	}
 
-	// Sort languages for deterministic output
+	// Get percentages for labelling
+	pcts := ctx.Languages.Percentages()
+
+	// Sort languages by percentage descending (most prevalent first),
+	// with alphabetical as tiebreaker
 	languages := make([]string, 0, len(coverage))
 	for lang := range coverage {
 		languages = append(languages, lang)
 	}
-	sort.Strings(languages)
+	sort.Slice(languages, func(i, j int) bool {
+		pi, pj := pcts[languages[i]], pcts[languages[j]]
+		if pi != pj {
+			return pi > pj
+		}
+		return languages[i] < languages[j]
+	})
 
 	scanTypes := []string{"SCA", "SAST", "Secrets"}
+
+	// Build display labels with percentages
+	labels := make(map[string]string, len(languages))
+	for _, lang := range languages {
+		if pct, ok := pcts[lang]; ok {
+			if pct < 1.0 {
+				labels[lang] = fmt.Sprintf("%s (<1%%)", lang)
+			} else {
+				labels[lang] = fmt.Sprintf("%s (%d%%)", lang, int(pct+0.5))
+			}
+		} else {
+			labels[lang] = lang
+		}
+	}
 
 	// Calculate column widths
 	langWidth := len("Language")
 	for _, lang := range languages {
-		if len(lang) > langWidth {
-			langWidth = len(lang)
+		if len(labels[lang]) > langWidth {
+			langWidth = len(labels[lang])
 		}
 	}
 	colWidth := 10 // width for each scan type column
@@ -235,7 +259,7 @@ func printCoverageMatrix(ctx RepoScanContext) {
 
 	// Rows
 	for _, lang := range languages {
-		fmt.Printf("  %-*s", langWidth, lang)
+		fmt.Printf("  %-*s", langWidth, labels[lang])
 		for _, st := range scanTypes {
 			state := coverage[lang][st]
 			var cell string

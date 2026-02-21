@@ -348,6 +348,26 @@ func detectLanguagesFromFilesystem(repoPath string) (*DetectedLanguages, error) 
 	}, nil
 }
 
+// Percentages returns raw percentage (0–100) for each language based on FileCounts.
+// Works with both byte counts (GitHub API) and file counts (filesystem).
+func (d *DetectedLanguages) Percentages() map[string]float64 {
+	if d == nil || len(d.FileCounts) == 0 {
+		return nil
+	}
+	total := 0
+	for _, n := range d.FileCounts {
+		total += n
+	}
+	if total == 0 {
+		return nil
+	}
+	pcts := make(map[string]float64, len(d.FileCounts))
+	for lang, n := range d.FileCounts {
+		pcts[lang] = float64(n) * 100.0 / float64(total)
+	}
+	return pcts
+}
+
 // hasLanguage checks if a specific language was detected
 func (d *DetectedLanguages) hasLanguage(lang string) bool {
 	for _, l := range d.Languages {
