@@ -13,8 +13,9 @@ func TestGet(t *testing.T) {
 		{name: "osv-scanner", wantName: "osv-scanner", wantType: "SCA", wantIconNE: true},
 		{name: "gosec", wantName: "gosec", wantType: "SAST", wantIconNE: true},
 		{name: "gitleaks", wantName: "gitleaks", wantType: "Secrets", wantIconNE: true},
-		{name: "binary-detector", wantName: "binary-detector", wantType: "SCA", wantIconNE: true},
+		{name: "binary-detector", wantName: "binary-detector", wantType: "Binary", wantIconNE: true},
 		{name: "scorecard", wantName: "scorecard", wantType: "Scorecard", wantIconNE: true},
+		{name: "syft", wantName: "syft", wantType: "SCA", wantIconNE: true},
 	}
 
 	for _, tt := range registered {

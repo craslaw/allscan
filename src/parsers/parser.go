@@ -54,6 +54,7 @@ var registry = map[string]ResultParser{
 	"gitleaks":        &GitleaksParser{},
 	"binary-detector": &BinaryParser{},
 	"scorecard":       &ScorecardParser{},
+	"syft":            &SyftParser{},
 }
 
 // Get returns the appropriate parser for a scanner name.

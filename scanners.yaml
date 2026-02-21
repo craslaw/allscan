@@ -46,8 +46,24 @@ scanners:
       - "."
       - "--output"
       - "{{output}}"
-    # Universal SCA scanner - runs on all languages (empty = no restrictions)
-    languages: []
+    # Languages with full support per https://google.github.io/osv-scanner/supported-languages-and-lockfiles/
+    # osv-scanner is lockfile-based; it only produces results when the corresponding lockfile exists.
+    languages:
+      - "go"          # go.mod
+      - "python"      # requirements.txt, Pipfile.lock, poetry.lock, pdm.lock, uv.lock
+      - "javascript"  # package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lock
+      - "typescript"  # same lockfile ecosystem as javascript
+      - "java"        # pom.xml, gradle.lockfile, buildscript-gradle.lockfile
+      - "c"           # conan.lock
+      - "cpp"         # conan.lock
+      - "ruby"        # Gemfile.lock, gems.locked
+      - "php"         # composer.lock
+      - "rust"        # Cargo.lock
+      - "dart"        # pubspec.lock
+      - "elixir"      # mix.lock
+      - "haskell"     # cabal.project.freeze, stack.yaml.lock
+      - "r"           # renv.lock
+      - "csharp"      # deps.json, packages.config, packages.lock.json (.NET)
     timeout: "5m"
 
   - name: "grype"
@@ -58,8 +74,29 @@ scanners:
       - "."
       - "-o"
       - "json={{output}}"
-    # Universal SCA scanner - runs on all languages (empty = no restrictions)
-    languages: []
+    # Grype uses syft internally; language support mirrors syft's ecosystem support.
+    # Full support per https://oss.anchore.com/docs/capabilities/all-packages/
+    languages:
+      - "go"          # go.mod, binary analysis
+      - "python"      # requirements*.txt, setup.py, poetry.lock, Pipfile.lock, pdm.lock, uv.lock
+      - "javascript"  # package.json, package-lock.json, yarn.lock, pnpm-lock.yaml
+      - "typescript"  # same package.json ecosystem as javascript
+      - "java"        # pom.xml, *.jar, *.war, *.ear, gradle.lockfile
+      - "c"           # conan.lock, conanfile.txt (Conan package manager)
+      - "cpp"         # conan.lock, conanfile.txt (Conan package manager)
+      - "ruby"        # Gemfile.lock, *.gemspec
+      - "php"         # composer.lock, installed.json
+      - "rust"        # Cargo.lock, binary analysis
+      - "swift"       # Podfile.lock (CocoaPods), Package.resolved (Swift PM)
+      - "dart"        # pubspec.yml, pubspec.yaml, pubspec.lock
+    # Languages with conditional support (◐): requires specific package manager files
+    languages_conditional:
+      - "csharp"      # packages.lock.json (.NET)
+      - "elixir"      # mix.lock
+      - "erlang"      # *.app, rebar.lock
+      - "haskell"     # cabal.project.freeze, stack.yaml.lock, stack.yaml
+      - "lua"         # *.rockspec (LuaRocks)
+      - "r"           # DESCRIPTION
     timeout: "5m"
 
   - name: "semgrep"
@@ -153,6 +190,41 @@ scanners:
     languages:
       - "go"
     timeout: "10m"
+
+  - name: "syft"
+    enabled: true
+    dojo_scan_type: "Anchore Syft"
+    command: "syft"
+    args:
+      - "."
+      - "-o"
+      - "syft-json={{output}}"
+    # Languages with full support per https://oss.anchore.com/docs/capabilities/all-packages/
+    # Evidence files detected: go.mod, package.json, pom.xml, Cargo.lock, Gemfile.lock,
+    # composer.lock, pubspec.yaml, requirements*.txt, conan.lock, Podfile.lock, etc.
+    languages:
+      - "go"          # go.mod, binary analysis
+      - "python"      # requirements*.txt, setup.py, poetry.lock, Pipfile.lock, pdm.lock, uv.lock
+      - "javascript"  # package.json, package-lock.json, yarn.lock, pnpm-lock.yaml
+      - "typescript"  # same package.json ecosystem as javascript
+      - "java"        # pom.xml, *.jar, *.war, *.ear, gradle.lockfile
+      - "c"           # conan.lock, conanfile.txt, conaninfo.txt (Conan package manager)
+      - "cpp"         # conan.lock, conanfile.txt, conaninfo.txt (Conan package manager)
+      - "ruby"        # Gemfile.lock, *.gemspec
+      - "php"         # composer.lock, installed.json
+      - "rust"        # Cargo.lock, binary analysis
+      - "swift"       # Podfile.lock (CocoaPods), Package.resolved (Swift PM)
+      - "dart"        # pubspec.yml, pubspec.yaml, pubspec.lock
+    # Languages with conditional support (◐): syft can detect packages only if the
+    # project uses a specific package manager that produces the required evidence files.
+    languages_conditional:
+      - "csharp"      # packages.lock.json (.NET) — not all .NET projects have this
+      - "elixir"      # mix.lock
+      - "erlang"      # *.app, rebar.lock
+      - "haskell"     # cabal.project.freeze, stack.yaml.lock, stack.yaml
+      - "lua"         # *.rockspec (LuaRocks)
+      - "r"           # DESCRIPTION (R package metadata)
+    timeout: "5m"
 
   - name: "scorecard"
     enabled: true

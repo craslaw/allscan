@@ -76,6 +76,54 @@ func TestGrypeParser_Parse(t *testing.T) {
 	}
 }
 
+func TestSyftParser_Parse(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    FindingSummary
+		wantErr bool
+	}{
+		{
+			name:  "empty artifacts",
+			input: `{"artifacts": []}`,
+			want:  FindingSummary{},
+		},
+		{
+			name:  "no artifacts key",
+			input: `{}`,
+			want:  FindingSummary{},
+		},
+		{
+			name: "multiple artifacts counted as info",
+			input: `{"artifacts": [
+				{"name": "lodash", "version": "4.17.21"},
+				{"name": "express", "version": "4.18.2"},
+				{"name": "react", "version": "18.2.0"}
+			]}`,
+			want: FindingSummary{Info: 3, Total: 3},
+		},
+		{
+			name:    "invalid JSON",
+			input:   `not json`,
+			wantErr: true,
+		},
+	}
+
+	parser := &SyftParser{}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parser.Parse([]byte(tt.input))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Errorf("Parse() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestOSVScannerParser_Parse(t *testing.T) {
 	tests := []struct {
 		name    string

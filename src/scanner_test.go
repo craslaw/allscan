@@ -39,6 +39,24 @@ func TestIsScannerCompatible(t *testing.T) {
 			detected: &DetectedLanguages{Languages: []string{}},
 			want:     false,
 		},
+		{
+			name: "conditional language match triggers run",
+			scanner: ScannerConfig{
+				Languages:            []string{"go"},
+				LanguagesConditional: []string{"elixir"},
+			},
+			detected: &DetectedLanguages{Languages: []string{"elixir"}},
+			want:     true,
+		},
+		{
+			name: "no match in languages or conditional",
+			scanner: ScannerConfig{
+				Languages:            []string{"go"},
+				LanguagesConditional: []string{"elixir"},
+			},
+			detected: &DetectedLanguages{Languages: []string{"java"}},
+			want:     false,
+		},
 	}
 
 	for _, tt := range tests {

@@ -296,7 +296,8 @@ func getScannersForRepo(config *Config, repo RepositoryConfig, detected *Detecte
 }
 
 // isScannerCompatible checks if a scanner should run based on detected languages
-// Scanners with empty Languages list are considered universal and always run
+// Scanners with empty Languages list are considered universal and always run.
+// Scanners also run if a detected language matches LanguagesConditional.
 func isScannerCompatible(scanner ScannerConfig, detected *DetectedLanguages) bool {
 	// If scanner has no language restrictions, it's compatible with everything
 	if len(scanner.Languages) == 0 {
@@ -308,8 +309,13 @@ func isScannerCompatible(scanner ScannerConfig, detected *DetectedLanguages) boo
 		return false
 	}
 
-	// Check if any of the scanner's supported languages were detected
-	return detected.hasAnyLanguage(scanner.Languages)
+	// Check full language support first
+	if detected.hasAnyLanguage(scanner.Languages) {
+		return true
+	}
+
+	// Also run if any conditionally-supported language is detected
+	return detected.hasAnyLanguage(scanner.LanguagesConditional)
 }
 
 // runScanner executes a single scanner against a repository

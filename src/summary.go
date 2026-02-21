@@ -29,9 +29,10 @@ const (
 type CoverageState int
 
 const (
-	CoverageNone    CoverageState = iota // No scanner of this type covers this language
-	CoverageFailed                       // A scanner covers this language but failed
-	CoverageOK                           // A scanner covers this language and succeeded
+	CoverageNone        CoverageState = iota // No scanner of this type covers this language
+	CoverageConditional                      // A scanner conditionally covers this language (requires specific package manager files)
+	CoverageFailed                           // A scanner covers this language but failed
+	CoverageOK                               // A scanner covers this language and succeeded
 )
 
 // printSummary displays a colorful summary of all scan results
@@ -141,8 +142,8 @@ func computeCoverage(ctx RepoScanContext) map[string]map[string]CoverageState {
 		}
 		scanType := parser.Type()
 
-		// Skip Scorecard (repo-level, not language-specific)
-		if scanType == "Scorecard" {
+		// Skip repo-level scanners that aren't language-specific
+		if scanType == "Scorecard" || scanType == "Binary" {
 			continue
 		}
 
@@ -179,17 +180,28 @@ func computeCoverage(ctx RepoScanContext) map[string]map[string]CoverageState {
 					}
 				}
 			}
-			if !covers {
+
+			if covers {
+				current := coverage[lang][scanType]
+				if scannerSuccess {
+					// Success always upgrades to OK
+					coverage[lang][scanType] = CoverageOK
+				} else if current < CoverageFailed {
+					// Failure upgrades from None/Conditional to Failed (doesn't downgrade OK)
+					coverage[lang][scanType] = CoverageFailed
+				}
 				continue
 			}
 
-			current := coverage[lang][scanType]
-			if scannerSuccess {
-				// Success always upgrades to OK
-				coverage[lang][scanType] = CoverageOK
-			} else if current == CoverageNone {
-				// Failure upgrades from None to Failed (but doesn't downgrade OK)
-				coverage[lang][scanType] = CoverageFailed
+			// Check conditional language support
+			for _, sl := range scanner.LanguagesConditional {
+				if strings.EqualFold(sl, lang) {
+					// Only upgrade from None to Conditional; don't override Failed or OK
+					if coverage[lang][scanType] == CoverageNone {
+						coverage[lang][scanType] = CoverageConditional
+					}
+					break
+				}
 			}
 		}
 	}
@@ -287,6 +299,8 @@ func printCoverageMatrix(ctx RepoScanContext) {
 				cell = fmt.Sprintf("%s✔%s", ColorBrightGreen, ColorReset)
 			case CoverageFailed:
 				cell = fmt.Sprintf("%s⚠%s", ColorYellow, ColorReset)
+			case CoverageConditional:
+				cell = fmt.Sprintf("%s◐%s", ColorYellow, ColorReset)
 			default:
 				cell = fmt.Sprintf("%s✘%s", ColorRed, ColorReset)
 			}
