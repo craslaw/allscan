@@ -20,8 +20,9 @@ const (
 	ColorMagenta = "\033[35m"
 	ColorCyan    = "\033[36m"
 	ColorWhite   = "\033[37m"
-	ColorBold    = "\033[1m"
-	ColorDim     = "\033[2m"
+	ColorBold        = "\033[1m"
+	ColorDim         = "\033[2m"
+	ColorBrightGreen = "\033[92m"
 )
 
 // CoverageState represents the coverage status for a (language, scanType) pair
@@ -222,15 +223,33 @@ func printCoverageMatrix(ctx RepoScanContext) {
 
 	scanTypes := []string{"SCA", "SAST", "Secrets"}
 
-	// Build display labels with percentages
+	// Build percentage strings and compute widths for vertical alignment
+	pctStrs := make(map[string]string, len(languages))
+	maxPctWidth := 0
+	maxLangNameWidth := 0
+	for _, lang := range languages {
+		if len(lang) > maxLangNameWidth {
+			maxLangNameWidth = len(lang)
+		}
+		if pct, ok := pcts[lang]; ok {
+			var s string
+			if pct < 1.0 {
+				s = "(<1%)"
+			} else {
+				s = fmt.Sprintf("(%d%%)", int(pct+0.5))
+			}
+			pctStrs[lang] = s
+			if len(s) > maxPctWidth {
+				maxPctWidth = len(s)
+			}
+		}
+	}
+
+	// Build labels: language name left-aligned, percentage right-aligned in fixed column
 	labels := make(map[string]string, len(languages))
 	for _, lang := range languages {
-		if pct, ok := pcts[lang]; ok {
-			if pct < 1.0 {
-				labels[lang] = fmt.Sprintf("%s (<1%%)", lang)
-			} else {
-				labels[lang] = fmt.Sprintf("%s (%d%%)", lang, int(pct+0.5))
-			}
+		if s, ok := pctStrs[lang]; ok {
+			labels[lang] = fmt.Sprintf("%-*s %*s", maxLangNameWidth, lang, maxPctWidth, s)
 		} else {
 			labels[lang] = lang
 		}
@@ -265,11 +284,11 @@ func printCoverageMatrix(ctx RepoScanContext) {
 			var cell string
 			switch state {
 			case CoverageOK:
-				cell = fmt.Sprintf("%s✓%s", ColorGreen, ColorReset)
+				cell = fmt.Sprintf("%s✔%s", ColorBrightGreen, ColorReset)
 			case CoverageFailed:
 				cell = fmt.Sprintf("%s⚠%s", ColorYellow, ColorReset)
 			default:
-				cell = fmt.Sprintf("%s✗%s", ColorRed, ColorReset)
+				cell = fmt.Sprintf("%s✘%s", ColorRed, ColorReset)
 			}
 			// Pad to colWidth (symbol is 1 visible char + color codes)
 			fmt.Printf("  %s%*s", cell, colWidth-1, "")
