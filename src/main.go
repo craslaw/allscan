@@ -337,8 +337,8 @@ func cloneRepository(config *Config, repo RepositoryConfig) (repoPath, commitHas
 }
 
 // runScans clones/updates repositories and runs scanners against them
-func runScans(config *Config) []ScanResult {
-	var results []ScanResult
+func runScans(config *Config) []RepoScanContext {
+	var contexts []RepoScanContext
 
 	for _, repo := range config.Repositories {
 		log.Printf("\n📦 Processing repository: %s", repo.URL)
@@ -357,18 +357,18 @@ func runScans(config *Config) []ScanResult {
 		}
 
 		// Run scanners on this repo
-		repoResults := runScannersOnRepo(config, repo, repoPath, commitHash, branchTag)
-		results = append(results, repoResults...)
+		ctx := runScannersOnRepo(config, repo, repoPath, commitHash, branchTag)
+		contexts = append(contexts, ctx)
 
 		// Check for fail-fast across all results
-		for _, result := range repoResults {
+		for _, result := range ctx.Results {
 			if !result.Success && config.Global.FailFast {
-				return results
+				return contexts
 			}
 		}
 	}
 
-	return results
+	return contexts
 }
 
 func main() {
@@ -436,13 +436,17 @@ func main() {
 	cleanupOldResults(config.Global.ResultsDir)
 
 	// Run scans
-	results := runScans(config)
+	contexts := runScans(config)
 
 	// Print summary
-	printSummary(results)
+	printSummary(contexts)
 
 	// Upload results (if configured)
 	if config.Global.UploadEndpoint != "" {
+		var results []ScanResult
+		for _, ctx := range contexts {
+			results = append(results, ctx.Results...)
+		}
 		uploadResults(config, results)
 	}
 }
@@ -482,10 +486,10 @@ func runLocalMode(config *Config, dryRun bool) {
 	cleanupOldResults(config.Global.ResultsDir)
 
 	// Run scans on current directory
-	results := runLocalScans(config, cwd, dirName)
+	ctx := runLocalScans(config, cwd, dirName)
 
 	// Print summary
-	printSummary(results)
+	printSummary([]RepoScanContext{ctx})
 
 	// Note: No upload in local mode
 	log.Printf("📝 Local mode: results saved to %s (upload skipped)", config.Global.ResultsDir)

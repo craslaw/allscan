@@ -25,7 +25,7 @@ func checkRequiredEnv(required []string) string {
 }
 
 // runScannersOnRepo executes all applicable scanners against a single repository
-func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath, commitHash, branchTag string) []ScanResult {
+func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath, commitHash, branchTag string) RepoScanContext {
 	var results []ScanResult
 
 	// Detect languages in the repository (tries GitHub API first, then filesystem)
@@ -47,15 +47,20 @@ func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath, commitHa
 
 		if !result.Success && config.Global.FailFast {
 			log.Printf("⚠️  Fail-fast enabled, stopping after error")
-			return results
+			break
 		}
 	}
 
-	return results
+	return RepoScanContext{
+		RepoURL:   repo.URL,
+		Results:   results,
+		Languages: detected,
+		Scanners:  scannersToRun,
+	}
 }
 
 // runLocalScans executes all enabled scanners against the current directory
-func runLocalScans(config *Config, repoPath string, repoName string) []ScanResult {
+func runLocalScans(config *Config, repoPath string, repoName string) RepoScanContext {
 	var results []ScanResult
 
 	log.Printf("\n📂 Scanning local directory: %s", repoPath)
@@ -85,11 +90,16 @@ func runLocalScans(config *Config, repoPath string, repoName string) []ScanResul
 
 		if !result.Success && config.Global.FailFast {
 			log.Printf("⚠️  Fail-fast enabled, stopping after error")
-			return results
+			break
 		}
 	}
 
-	return results
+	return RepoScanContext{
+		RepoURL:   localRepo.URL,
+		Results:   results,
+		Languages: detected,
+		Scanners:  scannersToRun,
+	}
 }
 
 // runScannerLocal executes a single scanner against a local directory
