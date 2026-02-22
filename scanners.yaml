@@ -191,40 +191,6 @@ scanners:
       - "go"
     timeout: "10m"
 
-  - name: "syft"
-    enabled: true
-    dojo_scan_type: "Anchore Syft"
-    command: "syft"
-    args:
-      - "."
-      - "-o"
-      - "syft-json={{output}}"
-    # Languages with full support per https://oss.anchore.com/docs/capabilities/all-packages/
-    # Evidence files detected: go.mod, package.json, pom.xml, Cargo.lock, Gemfile.lock,
-    # composer.lock, pubspec.yaml, requirements*.txt, conan.lock, Podfile.lock, etc.
-    languages:
-      - "go"          # go.mod, binary analysis
-      - "python"      # requirements*.txt, setup.py, poetry.lock, Pipfile.lock, pdm.lock, uv.lock
-      - "javascript"  # package.json, package-lock.json, yarn.lock, pnpm-lock.yaml
-      - "typescript"  # same package.json ecosystem as javascript
-      - "java"        # pom.xml, *.jar, *.war, *.ear, gradle.lockfile
-      - "c"           # conan.lock, conanfile.txt, conaninfo.txt (Conan package manager)
-      - "cpp"         # conan.lock, conanfile.txt, conaninfo.txt (Conan package manager)
-      - "ruby"        # Gemfile.lock, *.gemspec
-      - "php"         # composer.lock, installed.json
-      - "rust"        # Cargo.lock, binary analysis
-      - "swift"       # Podfile.lock (CocoaPods), Package.resolved (Swift PM)
-      - "dart"        # pubspec.yml, pubspec.yaml, pubspec.lock
-    # Languages with conditional support (◐): syft can detect packages only if the
-    # project uses a specific package manager that produces the required evidence files.
-    languages_conditional:
-      - "csharp"      # packages.lock.json (.NET) — not all .NET projects have this
-      - "elixir"      # mix.lock
-      - "erlang"      # *.app, rebar.lock
-      - "haskell"     # cabal.project.freeze, stack.yaml.lock, stack.yaml
-      - "lua"         # *.rockspec (LuaRocks)
-      - "r"           # DESCRIPTION (R package metadata)
-    timeout: "5m"
 
   - name: "scorecard"
     enabled: true

@@ -93,9 +93,9 @@ func resolveRepoTarget(url string) RepositoryConfig {
 	return resolveFromLsRemote(url, output)
 }
 
-// checkAllRequiredEnv checks required environment variables for all enabled scanners.
-// Returns a map of scanner name -> missing env var name for any that are missing.
-func checkAllRequiredEnv(config *Config) map[string]string {
+// checkAllRequiredEnv checks required environment variables for all enabled scanners
+// and for upload if configured. Returns a map of feature name -> missing env var name.
+func checkAllRequiredEnv(config *Config, localMode bool) map[string]string {
 	missing := make(map[string]string)
 	for _, scanner := range config.Scanners {
 		if !scanner.Enabled {
@@ -108,6 +108,9 @@ func checkAllRequiredEnv(config *Config) map[string]string {
 			}
 		}
 	}
+	if !localMode && config.Global.UploadEndpoint != "" && os.Getenv("VULN_MGMT_API_TOKEN") == "" {
+		missing["DefectDojo upload"] = "VULN_MGMT_API_TOKEN"
+	}
 	return missing
 }
 
@@ -115,9 +118,9 @@ func checkAllRequiredEnv(config *Config) map[string]string {
 func promptContinue(missing map[string]string) bool {
 	fmt.Println("\n⚠️  Missing required environment variables:")
 	for scanner, envVar := range missing {
-		fmt.Printf("   • %s%s%s%s requires %s%s%s\n", ColorBold, ColorCyan, scanner, ColorReset, ColorYellow, envVar, ColorReset)
+		fmt.Printf("   • %s%s%s%s requires %s%s%s\n", ColorBold, ColorCyan, titleCase(scanner), ColorReset, ColorYellow, envVar, ColorReset)
 	}
-	fmt.Print("\nContinue without these scanners? [y/N]: ")
+	fmt.Print("\nContinue anyway? [y/N]: ")
 
 	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
@@ -127,6 +130,17 @@ func promptContinue(missing map[string]string) bool {
 
 	response = strings.TrimSpace(strings.ToLower(response))
 	return response == "y" || response == "yes"
+}
+
+// titleCase capitalizes the first letter of each word in a string.
+func titleCase(s string) string {
+	words := strings.Fields(s)
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 // isValidCachedRepo checks if a directory is a valid git repo with the expected remote URL
@@ -392,7 +406,7 @@ func main() {
 	}
 
 	// Check required environment variables for all enabled scanners
-	if missing := checkAllRequiredEnv(config); len(missing) > 0 {
+	if missing := checkAllRequiredEnv(config, *local); len(missing) > 0 {
 		if !promptContinue(missing) {
 			log.Fatalf("Aborted: missing required environment variables")
 		}

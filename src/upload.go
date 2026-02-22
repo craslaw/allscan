@@ -76,6 +76,7 @@ func uploadSingleResult(config *Config, result ScanResult, authToken string) err
 	}
 	if result.BranchTag != "" {
 		fields["branch_tag"] = result.BranchTag
+		fields["version"] = result.BranchTag
 	}
 
 	// Build upload request using the Fluent Builder pattern
