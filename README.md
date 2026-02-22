@@ -27,17 +27,14 @@ Declarative security scanning for git repos
 
 Allscan automatically selects scanners based on detected repository languages. Scanners marked as "Universal" run on all repositories regardless of language.
 
-| Scanner | Type | Default | Languages |
-|---------|------|:-------:|-----------|
-| gosec | SAST | ✓ | Go |
-| golangci-lint | SAST | | Go |
-| semgrep | SAST | | Go, Python, JavaScript, TypeScript, Java, Kotlin, Scala, Ruby, PHP, C, C++, C#, Rust, Swift |
-| osv-scanner | SCA | ✓ | *Universal* |
-| grype | SCA | ✓ | *Universal* |
-| trivy | SCA | | *Universal* |
-| gitleaks | Secrets | ✓ | *Universal* |
-| binary-detector | Binary | ✓ | *Universal* |
-| scorecard | Posture | ✓ | *Universal* |
+| Scanner | Type | Languages |
+|---------|------|-----------|
+| gosec | SAST | Go |
+| osv-scanner | SCA | Go, Python, JavaScript, TypeScript, Java, C, C++, Ruby, PHP, Rust, Dart, Elixir, Haskell, R, C# |
+| grype | SCA | Go, Python, JavaScript, TypeScript, Java, C, C++, Ruby, PHP, Rust, Swift, Dart |
+| gitleaks | Secrets | *Universal* |
+| binary-detector | Binary | *Universal* |
+| scorecard | Posture | *Universal* |
 
 **Legend:**
 - **SAST** - Static Application Security Testing (source code analysis)
@@ -45,7 +42,6 @@ Allscan automatically selects scanners based on detected repository languages. S
 - **Secrets** - Credential and secret detection
 - **Binary** - Binary file detection
 - **Posture** - Security posture/health metrics (OpenSSF Scorecard)
-- **Default ✓** - Enabled by default in `scanners.yaml`
 - ***Universal*** - Runs on all repositories regardless of detected language
 
 # Use
