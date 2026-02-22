@@ -122,7 +122,7 @@ func computeCoverage(ctx RepoScanContext) map[string]map[string]CoverageState {
 	}
 
 	// Collect the scan types we care about (from parsers, excluding Scorecard)
-	scanTypes := []string{"SCA", "SAST", "Secrets"}
+	scanTypes := []string{"SCA", "SAST"}
 
 	// Initialize the matrix: every (language, scanType) starts as CoverageNone
 	coverage := make(map[string]map[string]CoverageState)
@@ -143,7 +143,7 @@ func computeCoverage(ctx RepoScanContext) map[string]map[string]CoverageState {
 		scanType := parser.Type()
 
 		// Skip repo-level scanners that aren't language-specific
-		if scanType == "Scorecard" || scanType == "Binary" {
+		if scanType == "Scorecard" || scanType == "Binary" || scanType == "Secrets" {
 			continue
 		}
 
@@ -233,7 +233,7 @@ func printCoverageMatrix(ctx RepoScanContext) {
 		return languages[i] < languages[j]
 	})
 
-	scanTypes := []string{"SCA", "SAST", "Secrets"}
+	scanTypes := []string{"SCA", "SAST"}
 
 	// Build percentage strings and compute widths for vertical alignment
 	pctStrs := make(map[string]string, len(languages))
@@ -308,6 +308,66 @@ func printCoverageMatrix(ctx RepoScanContext) {
 			fmt.Printf("  %s%*s", cell, colWidth-1, "")
 		}
 		fmt.Println()
+	}
+
+	// Print repo-level scanners below the table
+	printRepoLevelScanners(ctx)
+}
+
+// printRepoLevelScanners lists language-agnostic scanners (Secrets, Binary, Scorecard)
+// separately from the per-language coverage matrix.
+func printRepoLevelScanners(ctx RepoScanContext) {
+	type repoScanner struct {
+		name     string
+		scanType string
+		success  bool
+	}
+
+	var scanners []repoScanner
+	for _, scanner := range ctx.Scanners {
+		parser, ok := parsers.Get(scanner.Name)
+		if !ok {
+			continue
+		}
+		scanType := parser.Type()
+		if scanType != "Secrets" && scanType != "Binary" && scanType != "Scorecard" {
+			continue
+		}
+
+		// Check if this scanner has a result
+		found := false
+		success := false
+		for _, result := range ctx.Results {
+			if result.Scanner == scanner.Name {
+				found = true
+				success = result.Success
+				break
+			}
+		}
+		if !found {
+			continue
+		}
+
+		scanners = append(scanners, repoScanner{
+			name:     scanner.Name,
+			scanType: scanType,
+			success:  success,
+		})
+	}
+
+	if len(scanners) == 0 {
+		return
+	}
+
+	fmt.Printf("\n  %s%sRepo-Level Scanners%s\n", ColorBold, ColorCyan, ColorReset)
+	for _, s := range scanners {
+		var icon string
+		if s.success {
+			icon = fmt.Sprintf("%s✔%s", ColorBrightGreen, ColorReset)
+		} else {
+			icon = fmt.Sprintf("%s⚠%s", ColorYellow, ColorReset)
+		}
+		fmt.Printf("  %s %s (%s%s%s)\n", icon, s.name, ColorDim, s.scanType, ColorReset)
 	}
 }
 

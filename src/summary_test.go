@@ -66,8 +66,8 @@ func TestComputeCoverage(t *testing.T) {
 				},
 			},
 			expected: map[string]map[string]CoverageState{
-				"go":     {"SCA": CoverageOK, "SAST": CoverageNone, "Secrets": CoverageNone},
-				"python": {"SCA": CoverageOK, "SAST": CoverageNone, "Secrets": CoverageNone},
+				"go":     {"SCA": CoverageOK, "SAST": CoverageNone},
+				"python": {"SCA": CoverageOK, "SAST": CoverageNone},
 			},
 		},
 		{
@@ -82,8 +82,8 @@ func TestComputeCoverage(t *testing.T) {
 				},
 			},
 			expected: map[string]map[string]CoverageState{
-				"go":     {"SCA": CoverageNone, "SAST": CoverageOK, "Secrets": CoverageNone},
-				"python": {"SCA": CoverageNone, "SAST": CoverageNone, "Secrets": CoverageNone},
+				"go":     {"SCA": CoverageNone, "SAST": CoverageOK},
+				"python": {"SCA": CoverageNone, "SAST": CoverageNone},
 			},
 		},
 		{
@@ -98,7 +98,7 @@ func TestComputeCoverage(t *testing.T) {
 				},
 			},
 			expected: map[string]map[string]CoverageState{
-				"go": {"SCA": CoverageNone, "SAST": CoverageFailed, "Secrets": CoverageNone},
+				"go": {"SCA": CoverageNone, "SAST": CoverageFailed},
 			},
 		},
 		{
@@ -113,7 +113,7 @@ func TestComputeCoverage(t *testing.T) {
 				},
 			},
 			expected: map[string]map[string]CoverageState{
-				"go": {"SCA": CoverageNone, "SAST": CoverageNone, "Secrets": CoverageNone},
+				"go": {"SCA": CoverageNone, "SAST": CoverageNone},
 			},
 		},
 		{
@@ -134,9 +134,9 @@ func TestComputeCoverage(t *testing.T) {
 				},
 			},
 			expected: map[string]map[string]CoverageState{
-				"go":     {"SCA": CoverageOK, "SAST": CoverageOK, "Secrets": CoverageFailed},
-				"python": {"SCA": CoverageOK, "SAST": CoverageNone, "Secrets": CoverageFailed},
-				"shell":  {"SCA": CoverageOK, "SAST": CoverageNone, "Secrets": CoverageFailed},
+				"go":     {"SCA": CoverageOK, "SAST": CoverageOK},
+				"python": {"SCA": CoverageOK, "SAST": CoverageNone},
+				"shell":  {"SCA": CoverageOK, "SAST": CoverageNone},
 			},
 		},
 		{
@@ -155,8 +155,8 @@ func TestComputeCoverage(t *testing.T) {
 				},
 			},
 			expected: map[string]map[string]CoverageState{
-				"go":     {"SCA": CoverageOK, "SAST": CoverageNone, "Secrets": CoverageNone},
-				"elixir": {"SCA": CoverageConditional, "SAST": CoverageNone, "Secrets": CoverageNone},
+				"go":     {"SCA": CoverageOK, "SAST": CoverageNone},
+				"elixir": {"SCA": CoverageConditional, "SAST": CoverageNone},
 			},
 		},
 		{
@@ -180,7 +180,7 @@ func TestComputeCoverage(t *testing.T) {
 				},
 			},
 			expected: map[string]map[string]CoverageState{
-				"elixir": {"SCA": CoverageOK, "SAST": CoverageConditional, "Secrets": CoverageNone},
+				"elixir": {"SCA": CoverageOK, "SAST": CoverageConditional},
 			},
 		},
 		{
@@ -197,7 +197,7 @@ func TestComputeCoverage(t *testing.T) {
 				},
 			},
 			expected: map[string]map[string]CoverageState{
-				"go": {"SCA": CoverageNone, "SAST": CoverageOK, "Secrets": CoverageNone},
+				"go": {"SCA": CoverageNone, "SAST": CoverageOK},
 			},
 		},
 	}

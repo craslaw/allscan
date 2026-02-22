@@ -15,11 +15,11 @@ repositories:
   - url: "https://github.com/gitleaks/gitleaks"
     version: "v8.30.0"
   - url: "https://github.com/golangci/golangci-lint"
-    version: "v2.9.0"
+    version: "v2.10.1"
   - url: "https://github.com/securego/gosec"
     version: "v2.23.0"
   - url: "https://github.com/anchore/grype"
-    version: "v0.105.0"
+    version: "v0.108.0"
   - url: "https://github.com/google/osv-scanner"
     version: "v2.3.2"
   # === END AUTO-GENERATED ===
