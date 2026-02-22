@@ -118,7 +118,7 @@ func checkAllRequiredEnv(config *Config, localMode bool) map[string]string {
 func promptContinue(missing map[string]string) bool {
 	fmt.Println("\n⚠️  Missing required environment variables:")
 	for scanner, envVar := range missing {
-		fmt.Printf("   • %s%s%s%s requires %s%s%s\n", ColorBold, ColorCyan, scanner, ColorReset, ColorYellow, envVar, ColorReset)
+		fmt.Printf("   • %s%s%s%s requires %s%s%s\n", ColorBold, ColorCyan, titleCase(scanner), ColorReset, ColorYellow, envVar, ColorReset)
 	}
 	fmt.Print("\nContinue anyway? [y/N]: ")
 
@@ -130,6 +130,17 @@ func promptContinue(missing map[string]string) bool {
 
 	response = strings.TrimSpace(strings.ToLower(response))
 	return response == "y" || response == "yes"
+}
+
+// titleCase capitalizes the first letter of each word in a string.
+func titleCase(s string) string {
+	words := strings.Fields(s)
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 // isValidCachedRepo checks if a directory is a valid git repo with the expected remote URL
