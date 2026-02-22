@@ -140,6 +140,50 @@ func TestComputeCoverage(t *testing.T) {
 			},
 		},
 		{
+			name: "conditional language shows CoverageConditional",
+			ctx: RepoScanContext{
+				Languages: &DetectedLanguages{Languages: []string{"go", "elixir"}},
+				Scanners: []ScannerConfig{
+					{
+						Name:                 "test-sca-universal",
+						Languages:            []string{"go"},
+						LanguagesConditional: []string{"elixir"},
+					},
+				},
+				Results: []ScanResult{
+					{Scanner: "test-sca-universal", Success: true},
+				},
+			},
+			expected: map[string]map[string]CoverageState{
+				"go":     {"SCA": CoverageOK, "SAST": CoverageNone, "Secrets": CoverageNone},
+				"elixir": {"SCA": CoverageConditional, "SAST": CoverageNone, "Secrets": CoverageNone},
+			},
+		},
+		{
+			name: "conditional does not upgrade to failed on runtime failure",
+			ctx: RepoScanContext{
+				Languages: &DetectedLanguages{Languages: []string{"elixir"}},
+				Scanners: []ScannerConfig{
+					{
+						Name:      "test-sca-universal",
+						Languages: []string{},
+					},
+					{
+						Name:                 "test-sast-go",
+						Languages:            []string{"go"},
+						LanguagesConditional: []string{"elixir"},
+					},
+				},
+				Results: []ScanResult{
+					{Scanner: "test-sca-universal", Success: true},
+					{Scanner: "test-sast-go", Success: false},
+				},
+			},
+			expected: map[string]map[string]CoverageState{
+				"elixir": {"SCA": CoverageOK, "SAST": CoverageConditional, "Secrets": CoverageNone},
+			},
+		},
+		{
 			name: "success overrides prior failure for same type",
 			ctx: RepoScanContext{
 				Languages: &DetectedLanguages{Languages: []string{"go"}},

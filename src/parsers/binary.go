@@ -31,7 +31,7 @@ type BinaryFile struct {
 }
 
 func (p *BinaryParser) Name() string { return "binary-detector" }
-func (p *BinaryParser) Type() string { return "SCA" }
+func (p *BinaryParser) Type() string { return "Binary" }
 func (p *BinaryParser) Icon() string { return "📀" }
 
 func (p *BinaryParser) Parse(data []byte) (FindingSummary, error) {
