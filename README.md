@@ -18,10 +18,11 @@ Declarative security scanning for git repos
 ##  Core Workflow
 1. Clone - Shallow clones each repository from repositories.yaml
 2. Detect - Identifies languages via GitHub API (or filesystem scan as fallback)
-3. Select - Chooses compatible scanners based on detected languages
-4. Scan - Runs configured scanners against the cloned code
-5. Collect - Saves JSON results to scan-results/
-6. Upload - Optionally pushes findings to DefectDojo vulnerability management platform
+3. SBOM - Generates CycloneDX SBOM with Syft (reused if same repo+version+commit exists)
+4. Select - Chooses compatible scanners based on detected languages
+5. Scan - Runs configured scanners (Grype consumes the SBOM as input)
+6. Collect - Saves JSON results to scan-results/, SBOMs to scan-results/sboms/
+7. Upload - Optionally pushes findings to DefectDojo vulnerability management platform
 
 ## Scanners
 
@@ -29,6 +30,7 @@ Allscan automatically selects scanners based on detected repository languages. S
 
 | Scanner | Type | Languages |
 |---------|------|-----------|
+| syft | SBOM | *Universal* |
 | gosec | SAST | Go |
 | osv-scanner | SCA | Go, Python, JavaScript, TypeScript, Java, C, C++, Ruby, PHP, Rust, Dart, Elixir, Haskell, R, C# |
 | grype | SCA | Go, Python, JavaScript, TypeScript, Java, C, C++, Ruby, PHP, Rust, Swift, Dart |
@@ -37,6 +39,7 @@ Allscan automatically selects scanners based on detected repository languages. S
 | scorecard | Posture | *Universal* |
 
 **Legend:**
+- **SBOM** - Software Bill of Materials (CycloneDX JSON, generated before scanners run)
 - **SAST** - Static Application Security Testing (source code analysis)
 - **SCA** - Software Composition Analysis (dependency vulnerabilities)
 - **Secrets** - Credential and secret detection
@@ -134,6 +137,17 @@ When both `version` and `commit` are specified, allscan validates they match. A 
 ⚠️  WARNING: Tag v1.0.0 points to def5678, but expected abc1234
 ```
 
+### SBOM Generation
+
+Allscan generates CycloneDX JSON SBOMs using [Syft](https://github.com/anchore/syft) before running scanners. SBOMs are saved to `scan-results/sboms/` with the naming pattern:
+
+- Version tags: `{repo}_{version}_{commit}_{date}.cdx.json` (e.g., `grype_v0.87.0_abc1234_2026-02-21.cdx.json`)
+- Branches: `{repo}_{commit}_{date}.cdx.json` (e.g., `allscan_def5678_2026-02-21.cdx.json`)
+
+SBOMs are persistent artifacts (not cleaned up automatically) and are designed for ingestion into [OpenSSF GUAC](https://guac.sh/). Existing SBOMs matching the same repo+version+commit are reused to avoid regeneration.
+
+Grype consumes the SBOM as input (`grype sbom:<path>`) instead of re-scanning the directory, eliminating redundant work.
+
 ### DefectDojo Integration
 
 Version information is included in DefectDojo uploads:
@@ -178,6 +192,7 @@ allscan/
 │   ├── main.go                   # CLI entry point
 │   ├── config.go                 # Config structs and loading
 │   ├── scanner.go                # Scanner execution logic
+│   ├── sbom.go                   # SBOM generation with Syft
 │   ├── upload.go                 # DefectDojo upload logic
 │   ├── summary.go                # Colorful summary printing
 │   ├── language.go               # Language detection

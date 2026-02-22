@@ -370,8 +370,18 @@ func runScans(config *Config) []RepoScanContext {
 			continue
 		}
 
+		// Extract repo name for SBOM filename
+		parts := strings.Split(repo.URL, "/")
+		repoName := strings.TrimSuffix(parts[len(parts)-1], ".git")
+
+		// Generate SBOM (reused by grype via {{sbom}} template)
+		sbomPath, sbomErr := generateSBOM(config.Global.ResultsDir, repoPath, repoName, commitHash, branchTag)
+		if sbomErr != nil {
+			log.Printf("  ⚠️  SBOM generation failed: %v", sbomErr)
+		}
+
 		// Run scanners on this repo
-		ctx := runScannersOnRepo(config, repo, repoPath, commitHash, branchTag)
+		ctx := runScannersOnRepo(config, repo, repoPath, commitHash, branchTag, sbomPath)
 		contexts = append(contexts, ctx)
 
 		// Check for fail-fast across all results
@@ -481,6 +491,9 @@ func runLocalMode(config *Config, dryRun bool) {
 
 	if dryRun {
 		log.Printf("DRY RUN MODE - No scans will be executed")
+		log.Printf("\nSBOM Generation:")
+		log.Printf("  Tool: syft (CycloneDX JSON)")
+		log.Printf("  Output: %s/sboms/", config.Global.ResultsDir)
 		log.Printf("\nEnabled Scanners:")
 		for _, scanner := range config.Scanners {
 			if scanner.Enabled {
@@ -499,8 +512,20 @@ func runLocalMode(config *Config, dryRun bool) {
 	// Cleanup old scan results
 	cleanupOldResults(config.Global.ResultsDir)
 
+	// Get commit hash for SBOM filename (if in a git repo)
+	commitHash, _ := getCommitHash(cwd)
+	if commitHash == "" {
+		commitHash = "unknown"
+	}
+
+	// Generate SBOM (reused by grype via {{sbom}} template)
+	sbomPath, sbomErr := generateSBOM(config.Global.ResultsDir, cwd, dirName, commitHash, "local")
+	if sbomErr != nil {
+		log.Printf("  ⚠️  SBOM generation failed: %v", sbomErr)
+	}
+
 	// Run scans on current directory
-	ctx := runLocalScans(config, cwd, dirName)
+	ctx := runLocalScans(config, cwd, dirName, sbomPath)
 
 	// Print summary
 	printSummary([]RepoScanContext{ctx})
@@ -527,6 +552,11 @@ func printDryRun(config *Config) {
 			log.Printf("    Command: %s %s", scanner.Command, strings.Join(scanner.Args, " "))
 		}
 	}
+
+	log.Printf("\nSBOM Generation:")
+	log.Printf("  Tool: syft (CycloneDX JSON)")
+	log.Printf("  Output: %s/sboms/", config.Global.ResultsDir)
+	log.Printf("  Note: Grype will consume SBOM as input (sbom:{{sbom}})")
 
 	log.Printf("\nRepositories:")
 	for _, repo := range config.Repositories {

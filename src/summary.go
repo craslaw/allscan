@@ -95,6 +95,11 @@ func printSummary(contexts []RepoScanContext) {
 		// Print coverage matrix for this repo
 		printCoverageMatrix(ctx)
 
+		// Print SBOM path if generated
+		if ctx.SBOMPath != "" {
+			fmt.Printf("\n  %s%sSBOM%s: %s\n", ColorBold, ColorCyan, ColorReset, ctx.SBOMPath)
+		}
+
 		fmt.Println()
 	}
 
