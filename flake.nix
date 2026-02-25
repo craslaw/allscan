@@ -18,6 +18,7 @@
           golangci-lint = { pkg = pkgs.golangci-lint; url = "https://github.com/golangci/golangci-lint"; };
           osv-scanner = { pkg = pkgs.osv-scanner; url = "https://github.com/google/osv-scanner"; };
           grype = { pkg = pkgs.grype; url = "https://github.com/anchore/grype"; };
+          syft = { pkg = pkgs.syft; url = "https://github.com/anchore/syft"; };
         };
 
         # Generate YAML entries for scanner packages

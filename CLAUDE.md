@@ -42,14 +42,16 @@ Allscan is a declarative security scanning orchestrator written in Go and manage
 **Core Flow:**
 1. Load `scanners.yaml` (scanner definitions) and `repositories.yaml` (targets)
 2. Clone each repository (shallow clone)
-3. Run enabled scanners against each repo
-4. Parse results and print colorful summary
-5. Optionally upload to DefectDojo (requires `VULN_MGMT_API_TOKEN` env var)
+3. Generate CycloneDX SBOM with Syft (reused if same repo+version+commit exists)
+4. Run enabled scanners against each repo (Grype consumes SBOM as input)
+5. Parse results and print colorful summary
+6. Optionally upload to DefectDojo (requires `VULN_MGMT_API_TOKEN` env var)
 
 **Key Files:**
 - `src/main.go` - CLI entry point, handles `--local`/`--dry-run`/`--repo` flags
 - `src/config.go` - Config structs and YAML loading
 - `src/scanner.go` - Scanner execution with timeout handling
+- `src/sbom.go` - SBOM generation with Syft, deduplication, filename building
 - `src/upload.go` - DefectDojo upload using fluent builder pattern
 - `src/summary.go` - Colorful terminal output with ANSI codes
 - `src/parsers/` - Interface-based parser system for scanner outputs
@@ -117,6 +119,8 @@ new-scanner = pkgs.buildNpmPackage {
 
 **Scanner Args:**
 - `{{output}}` template is replaced with output file path
+- `{{sbom}}` template is replaced with the generated SBOM path (used by grype: `sbom:{{sbom}}`)
+- `{{repo}}` template is replaced with the repository URL
 - `args_local` overrides `args` in `--local` mode (e.g., gitleaks respects .gitignore locally)
 
 ## Documentation Maintenance

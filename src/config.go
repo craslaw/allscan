@@ -74,6 +74,7 @@ type RepoScanContext struct {
 	Results   []ScanResult
 	Languages *DetectedLanguages
 	Scanners  []ScannerConfig // scanners selected to run on this repo
+	SBOMPath  string          // path to generated CycloneDX SBOM (empty if generation failed)
 }
 
 // ValidateRepositoryConfig validates a repository configuration
@@ -176,6 +177,7 @@ func setupDirectories(config *Config) error {
 	dirs := []string{
 		config.Global.Workspace,
 		config.Global.ResultsDir,
+		filepath.Join(config.Global.ResultsDir, "sboms"),
 	}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0750); err != nil {

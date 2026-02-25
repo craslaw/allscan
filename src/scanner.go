@@ -25,7 +25,7 @@ func checkRequiredEnv(required []string) string {
 }
 
 // runScannersOnRepo executes all applicable scanners against a single repository
-func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath, commitHash, branchTag string) RepoScanContext {
+func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath, commitHash, branchTag, sbomPath string) RepoScanContext {
 	var results []ScanResult
 
 	// Detect languages in the repository (tries GitHub API first, then filesystem)
@@ -42,7 +42,7 @@ func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath, commitHa
 
 	// Run each scanner
 	for _, scanner := range scannersToRun {
-		result := runScanner(config, scanner, repo, repoPath, commitHash, branchTag)
+		result := runScanner(config, scanner, repo, repoPath, commitHash, branchTag, sbomPath)
 		results = append(results, result)
 
 		if !result.Success && config.Global.FailFast {
@@ -56,11 +56,12 @@ func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath, commitHa
 		Results:   results,
 		Languages: detected,
 		Scanners:  scannersToRun,
+		SBOMPath:  sbomPath,
 	}
 }
 
 // runLocalScans executes all enabled scanners against the current directory
-func runLocalScans(config *Config, repoPath string, repoName string) RepoScanContext {
+func runLocalScans(config *Config, repoPath string, repoName string, sbomPath string) RepoScanContext {
 	var results []ScanResult
 
 	log.Printf("\n📂 Scanning local directory: %s", repoPath)
@@ -85,7 +86,7 @@ func runLocalScans(config *Config, repoPath string, repoName string) RepoScanCon
 
 	// Run each scanner
 	for _, scanner := range scannersToRun {
-		result := runScannerLocal(config, scanner, localRepo, repoPath, repoName)
+		result := runScannerLocal(config, scanner, localRepo, repoPath, repoName, sbomPath)
 		results = append(results, result)
 
 		if !result.Success && config.Global.FailFast {
@@ -99,11 +100,12 @@ func runLocalScans(config *Config, repoPath string, repoName string) RepoScanCon
 		Results:   results,
 		Languages: detected,
 		Scanners:  scannersToRun,
+		SBOMPath:  sbomPath,
 	}
 }
 
 // runScannerLocal executes a single scanner against a local directory
-func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfig, repoPath string, repoName string) ScanResult {
+func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfig, repoPath string, repoName string, sbomPath string) ScanResult {
 	start := time.Now()
 
 	// Check required environment variables before doing any work
@@ -202,6 +204,7 @@ func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfi
 	for i, arg := range sourceArgs {
 		arg = strings.ReplaceAll(arg, "{{output}}", outputPath)
 		arg = strings.ReplaceAll(arg, "{{repo}}", repo.URL)
+		arg = strings.ReplaceAll(arg, "{{sbom}}", sbomPath)
 		args[i] = arg
 	}
 
@@ -257,7 +260,6 @@ func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfi
 		DojoScanType: scanner.DojoScanType,
 	}
 }
-
 
 // getScannersForRepo determines which scanners to run on a repository
 // It filters based on repo-specific scanner list, enabled status, and language compatibility
@@ -319,7 +321,7 @@ func isScannerCompatible(scanner ScannerConfig, detected *DetectedLanguages) boo
 }
 
 // runScanner executes a single scanner against a repository
-func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, repoPath, commitHash, branchTag string) ScanResult {
+func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, repoPath, commitHash, branchTag, sbomPath string) ScanResult {
 	start := time.Now()
 
 	// Check required environment variables before doing any work
@@ -426,6 +428,7 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	for i, arg := range scanner.Args {
 		arg = strings.ReplaceAll(arg, "{{output}}", outputPath)
 		arg = strings.ReplaceAll(arg, "{{repo}}", repo.URL)
+		arg = strings.ReplaceAll(arg, "{{sbom}}", sbomPath)
 		args[i] = arg
 	}
 
