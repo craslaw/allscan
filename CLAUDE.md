@@ -51,7 +51,7 @@ Allscan is a declarative security scanning orchestrator written in Go and manage
 6. Optionally upload to DefectDojo (requires `VULN_MGMT_API_TOKEN` env var)
 
 **Key Files:**
-- `src/main.go` - CLI entry point, handles `--local`/`--dry-run`/`--repo` flags
+- `src/main.go` - CLI entry point, handles `--local`/`--dry-run`/`--repo`/`--purl` flags
 - `src/config.go` - Config structs and YAML loading
 - `src/scanner.go` - Scanner execution with timeout handling
 - `src/sbom.go` - SBOM generation with Syft, deduplication, filename building

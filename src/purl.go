@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -239,6 +240,83 @@ func resolveGemRepo(purl packageurl.PackageURL, baseURL string) (string, []strin
 	}
 
 	return normalizeRepoURL(data.SourceCodeURI), nil
+}
+
+// resolvePURLToTarget resolves a pURL string from --purl flag into a RepositoryConfig.
+// Returns nil (with no error) if the user chose to skip after a failed resolution.
+func resolvePURLToTarget(purlStr string) (*RepositoryConfig, error) {
+	repoURL, version, warnings, err := resolvePURL(purlStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve pURL: %w", err)
+	}
+
+	if repoURL == "" {
+		fmt.Println("\n⚠️  Could not resolve source repository from pURL:")
+		for _, w := range warnings {
+			fmt.Printf("   - %s\n", w)
+		}
+		fmt.Println("\nWithout a source repository, this pURL will be skipped.")
+		if !promptYesNo("Continue without this target? [y/N]: ") {
+			return nil, fmt.Errorf("aborted: could not resolve repository from pURL")
+		}
+		return nil, nil
+	}
+
+	for _, w := range warnings {
+		log.Printf("⚠️  %s", w)
+	}
+	log.Printf("📦 Resolved pURL %s → %s", purlStr, repoURL)
+
+	if version != "" {
+		return &RepositoryConfig{URL: repoURL, Version: version}, nil
+	}
+	target := resolveRepoTarget(repoURL)
+	return &target, nil
+}
+
+// resolvePURLEntries resolves any RepositoryConfig entries that have a PURL field
+// set instead of a URL. The PURL is resolved to a URL (and optionally a version),
+// and the entry is updated in place. Entries that fail to resolve are skipped with a warning.
+func resolvePURLEntries(repos []RepositoryConfig) []RepositoryConfig {
+	var resolved []RepositoryConfig
+	for _, repo := range repos {
+		if repo.PURL == "" {
+			resolved = append(resolved, repo)
+			continue
+		}
+
+		repoURL, version, warnings, err := resolvePURL(repo.PURL)
+		if err != nil {
+			log.Printf("⚠️  Skipping pURL %s: %v", repo.PURL, err)
+			continue
+		}
+		if repoURL == "" {
+			log.Printf("⚠️  Skipping pURL %s: could not resolve repository", repo.PURL)
+			for _, w := range warnings {
+				log.Printf("   %s", w)
+			}
+			continue
+		}
+
+		for _, w := range warnings {
+			log.Printf("⚠️  %s", w)
+		}
+		log.Printf("📦 Resolved pURL %s → %s", repo.PURL, repoURL)
+
+		repo.URL = repoURL
+		if version != "" && repo.Version == "" {
+			repo.Version = version
+		}
+		// If no version and no branch/commit set, resolve latest tag
+		if repo.Version == "" && repo.Branch == "" && repo.Commit == "" {
+			target := resolveRepoTarget(repoURL)
+			repo.Version = target.Version
+			repo.Branch = target.Branch
+			repo.Commit = target.Commit
+		}
+		resolved = append(resolved, repo)
+	}
+	return resolved
 }
 
 // normalizeRepoURL normalizes various git URL formats to a clean HTTPS URL.

@@ -361,3 +361,97 @@ func TestResolveGemRepo(t *testing.T) {
 		})
 	}
 }
+
+func TestResolvePURLEntries(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []RepositoryConfig
+		wantLen  int
+		wantURLs []string
+	}{
+		{
+			name: "url entries pass through unchanged",
+			input: []RepositoryConfig{
+				{URL: "https://github.com/foo/bar", Branch: "main"},
+			},
+			wantLen:  1,
+			wantURLs: []string{"https://github.com/foo/bar"},
+		},
+		{
+			name: "github purl resolved",
+			input: []RepositoryConfig{
+				{PURL: "pkg:github/gin-gonic/gin@v1.10.0"},
+			},
+			wantLen:  1,
+			wantURLs: []string{"https://github.com/gin-gonic/gin"},
+		},
+		{
+			name: "mixed url and purl entries",
+			input: []RepositoryConfig{
+				{URL: "https://github.com/foo/bar", Branch: "main"},
+				{PURL: "pkg:github/baz/qux@v2.0.0"},
+			},
+			wantLen:  2,
+			wantURLs: []string{"https://github.com/foo/bar", "https://github.com/baz/qux"},
+		},
+		{
+			name: "unresolvable purl skipped",
+			input: []RepositoryConfig{
+				{PURL: "pkg:docker/nginx@1.25"},
+				{URL: "https://github.com/foo/bar", Branch: "main"},
+			},
+			wantLen:  1,
+			wantURLs: []string{"https://github.com/foo/bar"},
+		},
+		{
+			name: "invalid purl skipped",
+			input: []RepositoryConfig{
+				{PURL: "not-valid"},
+				{URL: "https://github.com/foo/bar", Branch: "main"},
+			},
+			wantLen:  1,
+			wantURLs: []string{"https://github.com/foo/bar"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := resolvePURLEntries(tt.input)
+			if len(result) != tt.wantLen {
+				t.Fatalf("resolvePURLEntries() returned %d entries, want %d", len(result), tt.wantLen)
+			}
+			for i, wantURL := range tt.wantURLs {
+				if result[i].URL != wantURL {
+					t.Errorf("entry[%d].URL = %q, want %q", i, result[i].URL, wantURL)
+				}
+			}
+		})
+	}
+}
+
+func TestResolvePURLEntries_VersionFromPURL(t *testing.T) {
+	repos := []RepositoryConfig{
+		{PURL: "pkg:github/foo/bar@v3.0.0"},
+	}
+	result := resolvePURLEntries(repos)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(result))
+	}
+	if result[0].Version != "v3.0.0" {
+		t.Errorf("expected version v3.0.0, got %q", result[0].Version)
+	}
+}
+
+func TestResolvePURLEntries_ExplicitVersionOverride(t *testing.T) {
+	repos := []RepositoryConfig{
+		{PURL: "pkg:github/foo/bar@v2.0.0", Version: "v1.0.0"},
+	}
+	result := resolvePURLEntries(repos)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(result))
+	}
+	// Explicit version in the YAML should take precedence over pURL version
+	if result[0].Version != "v1.0.0" {
+		t.Errorf("expected version v1.0.0, got %q", result[0].Version)
+	}
+}

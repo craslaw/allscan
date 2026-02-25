@@ -410,19 +410,9 @@ func main() {
 	purlFlag := flag.String("purl", "", "Scan a package by its Package URL (pURL), e.g. pkg:github/owner/repo@v1.0.0")
 	flag.Parse()
 
-	// Mutual exclusivity check
-	modeCount := 0
-	if *local {
-		modeCount++
-	}
-	if *repo != "" {
-		modeCount++
-	}
-	if *purlFlag != "" {
-		modeCount++
-	}
-	if modeCount > 1 {
-		log.Fatalf("Flags --local, --repo, and --purl are mutually exclusive")
+	// --local is incompatible with --repo and --purl
+	if *local && (*repo != "" || *purlFlag != "") {
+		log.Fatalf("Flag --local cannot be combined with --repo or --purl")
 	}
 
 	// Load configuration
@@ -449,50 +439,40 @@ func main() {
 		return
 	}
 
-	// pURL mode: resolve package URL to repository
-	if *purlFlag != "" {
-		repoURL, version, warnings, err := resolvePURL(*purlFlag)
-		if err != nil {
-			log.Fatalf("Failed to resolve pURL: %v", err)
-		}
+	// Accumulate targets from all sources: repositories.yaml, --repo, --purl
+	var targets []RepositoryConfig
 
-		if repoURL == "" {
-			fmt.Println("\n⚠️  Could not resolve source repository from pURL:")
-			for _, w := range warnings {
-				fmt.Printf("   - %s\n", w)
-			}
-			fmt.Println("\nWithout a source repository, no scans can be performed.")
-			if !promptYesNo("Continue anyway? [y/N]: ") {
-				log.Fatalf("Aborted: could not resolve repository from pURL")
-			}
-			return
-		}
-
-		// Print non-fatal warnings
-		for _, w := range warnings {
-			log.Printf("⚠️  %s", w)
-		}
-
-		log.Printf("📦 Resolved pURL → %s", repoURL)
-
-		var target RepositoryConfig
-		if version != "" {
-			target = RepositoryConfig{URL: repoURL, Version: version}
-		} else {
-			target = resolveRepoTarget(repoURL)
-		}
-		config.Repositories = []RepositoryConfig{target}
-	} else if *repo != "" {
-		// Remote mode: resolve single --repo target
-		target := resolveRepoTarget(*repo)
-		config.Repositories = []RepositoryConfig{target}
-	} else {
+	// Load from repositories.yaml unless --repo or --purl were provided (to avoid
+	// scanning the default file's entries when the user only wants specific targets)
+	if *repo == "" && *purlFlag == "" {
 		repositories, err := loadRepositories(*reposPath)
 		if err != nil {
 			log.Fatalf("Failed to load repositories: %v", err)
 		}
-		config.Repositories = repositories
+		targets = append(targets, repositories...)
 	}
+
+	// Resolve --repo flag
+	if *repo != "" {
+		target := resolveRepoTarget(*repo)
+		targets = append(targets, target)
+	}
+
+	// Resolve --purl flag
+	if *purlFlag != "" {
+		target, err := resolvePURLToTarget(*purlFlag)
+		if err != nil {
+			log.Fatalf("%v", err)
+		}
+		if target != nil {
+			targets = append(targets, *target)
+		}
+	}
+
+	// Resolve any pURL entries from repositories.yaml
+	targets = resolvePURLEntries(targets)
+
+	config.Repositories = targets
 
 	log.Printf("🔍 Vulnerability Scanner Orchestrator")
 	log.Printf("Config: %s", *configPath)
