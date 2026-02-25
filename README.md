@@ -68,6 +68,7 @@ All commands must be run from the project root directory.
    ```bash
    nix run                    # Scan repositories from repositories.yaml
    nix run -- --repo https://github.com/owner/repo  # Scan a single repo (auto-detects latest release)
+   nix run -- --purl "pkg:npm/express@4.18.2"       # Scan a package by its Package URL (pURL)
    ```
 
 ## Development Mode
@@ -193,6 +194,7 @@ allscan/
 │   ├── config.go                 # Config structs and loading
 │   ├── scanner.go                # Scanner execution logic
 │   ├── sbom.go                   # SBOM generation with Syft
+│   ├── purl.go                   # Package URL (pURL) resolution
 │   ├── upload.go                 # DefectDojo upload logic
 │   ├── summary.go                # Colorful summary printing
 │   ├── language.go               # Language detection
