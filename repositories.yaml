@@ -22,4 +22,6 @@ repositories:
     version: "v0.108.0"
   - url: "https://github.com/google/osv-scanner"
     version: "v2.3.2"
+  - url: "https://github.com/anchore/syft"
+    version: "v1.41.2"
   # === END AUTO-GENERATED ===
