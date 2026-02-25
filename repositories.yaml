@@ -1,10 +1,6 @@
 # Repository targets for security scanning
 # Scanner versions are auto-generated from flake.lock - do not edit manually
 #
-# Target options:
-#   url: "https://github.com/owner/repo"  - Repository URL (required unless purl is set)
-#   purl: "pkg:github/owner/repo@v1.0.0"  - Package URL (resolved to url at load time)
-#
 # Pinning options (in order of precedence):
 #   version: "v1.2.3"  - Pin to a specific tag
 #   commit: "abc1234"  - Pin to a specific commit hash (7-40 hex chars)
