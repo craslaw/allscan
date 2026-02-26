@@ -68,6 +68,7 @@ All commands must be run from the project root directory.
    ```bash
    nix run                    # Scan repositories from repositories.yaml
    nix run -- --repo https://github.com/owner/repo  # Scan a single repo (auto-detects latest release)
+   nix run -- --purl "pkg:npm/express@4.18.2"       # Scan a package by its Package URL (pURL)
    ```
 
 ## Development Mode
@@ -128,6 +129,30 @@ repositories:
 ```
 
 **Precedence:** version tag > commit hash > branch (latest)
+
+### Package URL (pURL) Targets
+
+Repository entries can use a [Package URL](https://github.com/package-url/purl-spec) instead of a direct URL. The pURL is resolved to a source repository at load time:
+
+```yaml
+repositories:
+  # Scan a GitHub package
+  - purl: "pkg:github/gin-gonic/gin@v1.10.0"
+
+  # Scan an npm package (resolved via npm registry)
+  - purl: "pkg:npm/express@4.18.2"
+
+  # Use repository_url qualifier for unsupported types
+  - purl: "pkg:docker/nginx@1.25?repository_url=https://github.com/nginx/nginx"
+
+  # Override the pURL version with an explicit version
+  - purl: "pkg:github/foo/bar@v2.0.0"
+    version: "v1.0.0"
+```
+
+Supported pURL types: `github`, `golang`, `npm`, `pypi`, `cargo`, `gem`. Any type can use the `repository_url` qualifier.
+
+The `--purl` flag and `--repo` flag can be combined with each other and with `repositories.yaml` entries. When `--repo` or `--purl` are provided without the other, `repositories.yaml` is not loaded (to avoid scanning default targets). Use both flags together or add pURL entries directly to `repositories.yaml` to combine sources.
 
 ### Version Validation
 
@@ -193,6 +218,7 @@ allscan/
 │   ├── config.go                 # Config structs and loading
 │   ├── scanner.go                # Scanner execution logic
 │   ├── sbom.go                   # SBOM generation with Syft
+│   ├── purl.go                   # Package URL (pURL) resolution
 │   ├── upload.go                 # DefectDojo upload logic
 │   ├── summary.go                # Colorful summary printing
 │   ├── language.go               # Language detection

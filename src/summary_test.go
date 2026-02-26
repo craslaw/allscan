@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"vuln-scanner-orchestrator/parsers"
+	"allscan/parsers"
 )
 
 // testParser is a minimal ResultParser for testing coverage computation

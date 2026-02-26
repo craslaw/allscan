@@ -22,11 +22,12 @@ type Config struct {
 
 // GlobalConfig holds global settings for the scanner orchestrator
 type GlobalConfig struct {
-	Workspace      string `yaml:"workspace"`
-	ResultsDir     string `yaml:"results_dir"`
-	UploadEndpoint string `yaml:"upload_endpoint"`
-	MaxConcurrent  int    `yaml:"max_concurrent"`
-	FailFast       bool   `yaml:"fail_fast"`
+	Workspace       string `yaml:"workspace"`
+	ResultsDir      string `yaml:"results_dir"`
+	UploadEndpoint  string `yaml:"upload_endpoint"`
+	MaxConcurrent   int    `yaml:"max_concurrent"`
+	FailFast        bool   `yaml:"fail_fast"`
+	ProductOverride string `yaml:"-"` // CLI-only: overrides auto-detected product name for DefectDojo
 }
 
 // ScannerConfig defines a security scanner and its execution parameters
@@ -47,11 +48,13 @@ type ScannerConfig struct {
 
 // RepositoryConfig defines a target repository to scan
 type RepositoryConfig struct {
-	URL      string   `yaml:"url"`
-	Branch   string   `yaml:"branch"`
-	Version  string   `yaml:"version,omitempty"`  // Tag name (e.g., "v1.2.3") - highest precedence
-	Commit   string   `yaml:"commit,omitempty"`   // Commit SHA (7-40 hex chars)
-	Scanners []string `yaml:"scanners"`           // Optional: specific scanners to run
+	URL         string   `yaml:"url"`
+	PURL        string   `yaml:"purl,omitempty"`     // Package URL (resolved to URL at load time)
+	Branch      string   `yaml:"branch"`
+	Version     string   `yaml:"version,omitempty"`  // Tag name (e.g., "v1.2.3") - highest precedence
+	Commit      string   `yaml:"commit,omitempty"`   // Commit SHA (7-40 hex chars)
+	Scanners    []string `yaml:"scanners"`           // Optional: specific scanners to run
+	PURLVersion string   `yaml:"-"`                  // Original pURL version (not persisted, used for SBOM naming)
 }
 
 // ScanResult holds the outcome of running a scanner on a repository

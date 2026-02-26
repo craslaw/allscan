@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"vuln-scanner-orchestrator/parsers"
+	"allscan/parsers"
 )
 
 // checkRequiredEnv verifies that all required environment variables are set.

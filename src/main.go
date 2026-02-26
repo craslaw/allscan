@@ -114,13 +114,9 @@ func checkAllRequiredEnv(config *Config, localMode bool) map[string]string {
 	return missing
 }
 
-// promptContinue asks the user if they want to continue and returns their choice.
-func promptContinue(missing map[string]string) bool {
-	fmt.Println("\n⚠️  Missing required environment variables:")
-	for scanner, envVar := range missing {
-		fmt.Printf("   • %s%s%s%s requires %s%s%s\n", ColorBold, ColorCyan, titleCase(scanner), ColorReset, ColorYellow, envVar, ColorReset)
-	}
-	fmt.Print("\nContinue anyway? [y/N]: ")
+// promptYesNo displays a prompt and returns true if the user answers yes.
+func promptYesNo(prompt string) bool {
+	fmt.Print(prompt)
 
 	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
@@ -130,6 +126,15 @@ func promptContinue(missing map[string]string) bool {
 
 	response = strings.TrimSpace(strings.ToLower(response))
 	return response == "y" || response == "yes"
+}
+
+// promptContinue asks the user if they want to continue and returns their choice.
+func promptContinue(missing map[string]string) bool {
+	fmt.Println("\n⚠️  Missing required environment variables:")
+	for scanner, envVar := range missing {
+		fmt.Printf("   • %s%s%s%s requires %s%s%s\n", ColorBold, ColorCyan, titleCase(scanner), ColorReset, ColorYellow, envVar, ColorReset)
+	}
+	return promptYesNo("\nContinue anyway? [y/N]: ")
 }
 
 // titleCase capitalizes the first letter of each word in a string.
@@ -374,8 +379,15 @@ func runScans(config *Config) []RepoScanContext {
 		parts := strings.Split(repo.URL, "/")
 		repoName := strings.TrimSuffix(parts[len(parts)-1], ".git")
 
+		// Use the original pURL version in the SBOM filename when available,
+		// so that the user-provided version appears rather than the git tag name
+		sbomVersion := branchTag
+		if repo.PURLVersion != "" {
+			sbomVersion = repo.PURLVersion
+		}
+
 		// Generate SBOM (reused by grype via {{sbom}} template)
-		sbomPath, sbomErr := generateSBOM(config.Global.ResultsDir, repoPath, repoName, commitHash, branchTag)
+		sbomPath, sbomErr := generateSBOM(config.Global.ResultsDir, repoPath, repoName, commitHash, sbomVersion)
 		if sbomErr != nil {
 			log.Printf("  ⚠️  SBOM generation failed: %v", sbomErr)
 		}
@@ -402,13 +414,33 @@ func main() {
 	dryRun := flag.Bool("dry-run", false, "Print what would be done without executing")
 	local := flag.Bool("local", false, "Scan current directory instead of cloning repos (skips upload)")
 	repo := flag.String("repo", "", "Scan a single repository by URL (uses latest tagged release if available)")
+	purlFlag := flag.String("purl", "", "Scan a package by its Package URL (pURL), e.g. pkg:github/owner/repo@v1.0.0")
+	product := flag.String("product", "", "Product name for DefectDojo uploads (overrides auto-detected name)")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: allscan [options]\n\nOptions:\n")
+		flag.VisitAll(func(f *flag.Flag) {
+			if f.DefValue != "" && f.DefValue != "false" {
+				fmt.Fprintf(os.Stderr, "  --%-12s %s (default: %s)\n", f.Name, f.Usage, f.DefValue)
+			} else {
+				fmt.Fprintf(os.Stderr, "  --%-12s %s\n", f.Name, f.Usage)
+			}
+		})
+	}
 	flag.Parse()
+
+	// --local is incompatible with --repo and --purl
+	if *local && (*repo != "" || *purlFlag != "") {
+		log.Fatalf("Flag --local cannot be combined with --repo or --purl")
+	}
 
 	// Load configuration
 	config, err := loadConfig(*configPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+
+	// Store CLI-only overrides in config
+	config.Global.ProductOverride = *product
 
 	// Parse timeouts
 	if err := parseTimeouts(config); err != nil {
@@ -428,17 +460,40 @@ func main() {
 		return
 	}
 
-	// Remote mode: load repositories from file or resolve single --repo target
-	if *repo != "" {
-		target := resolveRepoTarget(*repo)
-		config.Repositories = []RepositoryConfig{target}
-	} else {
+	// Accumulate targets from all sources: repositories.yaml, --repo, --purl
+	var targets []RepositoryConfig
+
+	// Load from repositories.yaml unless --repo or --purl were provided (to avoid
+	// scanning the default file's entries when the user only wants specific targets)
+	if *repo == "" && *purlFlag == "" {
 		repositories, err := loadRepositories(*reposPath)
 		if err != nil {
 			log.Fatalf("Failed to load repositories: %v", err)
 		}
-		config.Repositories = repositories
+		targets = append(targets, repositories...)
 	}
+
+	// Resolve --repo flag
+	if *repo != "" {
+		target := resolveRepoTarget(*repo)
+		targets = append(targets, target)
+	}
+
+	// Resolve --purl flag
+	if *purlFlag != "" {
+		target, err := resolvePURLToTarget(*purlFlag)
+		if err != nil {
+			log.Fatalf("%v", err)
+		}
+		if target != nil {
+			targets = append(targets, *target)
+		}
+	}
+
+	// Resolve any pURL entries from repositories.yaml
+	targets = resolvePURLEntries(targets)
+
+	config.Repositories = targets
 
 	log.Printf("🔍 Vulnerability Scanner Orchestrator")
 	log.Printf("Config: %s", *configPath)

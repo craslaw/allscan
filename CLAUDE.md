@@ -16,6 +16,9 @@ nix run
 # Scan a single repository (auto-detects latest tagged release)
 nix run -- --repo https://github.com/owner/repo
 
+# Scan a package by its Package URL (pURL)
+nix run -- --purl "pkg:npm/express@4.18.2"
+
 # Run in local mode (scan current directory, no upload)
 nix run -- --local
 
@@ -48,10 +51,11 @@ Allscan is a declarative security scanning orchestrator written in Go and manage
 6. Optionally upload to DefectDojo (requires `VULN_MGMT_API_TOKEN` env var)
 
 **Key Files:**
-- `src/main.go` - CLI entry point, handles `--local`/`--dry-run`/`--repo` flags
+- `src/main.go` - CLI entry point, handles `--local`/`--dry-run`/`--repo`/`--purl` flags
 - `src/config.go` - Config structs and YAML loading
 - `src/scanner.go` - Scanner execution with timeout handling
 - `src/sbom.go` - SBOM generation with Syft, deduplication, filename building
+- `src/purl.go` - Package URL (pURL) parsing and repository resolution
 - `src/upload.go` - DefectDojo upload using fluent builder pattern
 - `src/summary.go` - Colorful terminal output with ANSI codes
 - `src/parsers/` - Interface-based parser system for scanner outputs
