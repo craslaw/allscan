@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -242,6 +243,118 @@ func resolveGemRepo(purl packageurl.PackageURL, baseURL string) (string, []strin
 	return normalizeRepoURL(data.SourceCodeURI), nil
 }
 
+// resolveVersionTag searches the remote tags for a tag matching the pURL version.
+// pURL versions often don't match git tags exactly (e.g., pURL "0.10.75" may correspond
+// to git tag "openssl-v0.10.75" or "v0.10.75"). This function tries exact match first,
+// then falls back to suffix matching.
+// Returns the matched tag name and commit hash, or empty strings if no match is found.
+func resolveVersionTag(repoURL, version string) (tagName, commitHash string) {
+	return resolveVersionTagFromOutput(repoURL, version, nil)
+}
+
+// resolveVersionTagFromOutput is the testable core of resolveVersionTag.
+// If lsRemoteOutput is nil, it runs git ls-remote against the repo URL.
+func resolveVersionTagFromOutput(repoURL, version string, lsRemoteOutput []byte) (tagName, commitHash string) {
+	if lsRemoteOutput == nil {
+		cmd := exec.Command("git", "ls-remote", "--tags", repoURL)
+		output, err := cmd.Output()
+		if err != nil {
+			log.Printf("⚠️  Could not list tags for %s: %v", repoURL, err)
+			return "", ""
+		}
+		lsRemoteOutput = output
+	}
+
+	// Parse all tags and their dereferenced commits
+	type tagInfo struct {
+		name string
+		hash string
+	}
+	var tags []tagInfo
+	derefHashes := make(map[string]string)
+
+	lines := strings.Split(strings.TrimSpace(string(lsRemoteOutput)), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) != 2 {
+			continue
+		}
+		hash := parts[0]
+		ref := parts[1]
+
+		if base, ok := strings.CutSuffix(ref, "^{}"); ok {
+			tagName := strings.TrimPrefix(base, "refs/tags/")
+			derefHashes[tagName] = hash
+			continue
+		}
+
+		if !strings.HasPrefix(ref, "refs/tags/") {
+			continue
+		}
+
+		name := strings.TrimPrefix(ref, "refs/tags/")
+		tags = append(tags, tagInfo{name: name, hash: hash})
+	}
+
+	// Build candidate version strings to match against tag names.
+	// For version "0.10.75", try: "0.10.75", "v0.10.75"
+	candidates := []string{version}
+	if !strings.HasPrefix(version, "v") {
+		candidates = append(candidates, "v"+version)
+	}
+
+	// Pass 1: exact match
+	for _, tag := range tags {
+		for _, candidate := range candidates {
+			if tag.name == candidate {
+				hash := tag.hash
+				if deref, ok := derefHashes[tag.name]; ok {
+					hash = deref
+				}
+				return tag.name, hash
+			}
+		}
+	}
+
+	// Pass 2: tag ends with the version (e.g., "openssl-v0.10.75" matches "0.10.75")
+	for _, tag := range tags {
+		for _, candidate := range candidates {
+			if strings.HasSuffix(tag.name, "-"+candidate) || strings.HasSuffix(tag.name, "/"+candidate) {
+				hash := tag.hash
+				if deref, ok := derefHashes[tag.name]; ok {
+					hash = deref
+				}
+				return tag.name, hash
+			}
+		}
+	}
+
+	return "", ""
+}
+
+// resolvePURLVersion resolves a pURL version to a RepositoryConfig by finding
+// the matching git tag and using its commit hash for cloning.
+// The original pURL version is preserved in PURLVersion for SBOM naming.
+func resolvePURLVersion(repoURL, version string) RepositoryConfig {
+	tagName, commitHash := resolveVersionTag(repoURL, version)
+	if tagName != "" {
+		shortHash := commitHash
+		if len(shortHash) > 7 {
+			shortHash = shortHash[:7]
+		}
+		log.Printf("🏷️  Matched pURL version %s → tag %s (%s)", version, tagName, shortHash)
+		return RepositoryConfig{URL: repoURL, Version: tagName, Commit: shortHash, PURLVersion: version}
+	}
+
+	// No matching tag found — fall back to using the version directly as a tag name.
+	// This will work when the pURL version exactly matches the git tag.
+	log.Printf("⚠️  No tag matching version %q found, trying as literal tag", version)
+	return RepositoryConfig{URL: repoURL, Version: version, PURLVersion: version}
+}
+
 // resolvePURLToTarget resolves a pURL string from --purl flag into a RepositoryConfig.
 // Returns nil (with no error) if the user chose to skip after a failed resolution.
 func resolvePURLToTarget(purlStr string) (*RepositoryConfig, error) {
@@ -268,7 +381,8 @@ func resolvePURLToTarget(purlStr string) (*RepositoryConfig, error) {
 	log.Printf("📦 Resolved pURL %s → %s", purlStr, repoURL)
 
 	if version != "" {
-		return &RepositoryConfig{URL: repoURL, Version: version}, nil
+		target := resolvePURLVersion(repoURL, version)
+		return &target, nil
 	}
 	target := resolveRepoTarget(repoURL)
 	return &target, nil
@@ -304,15 +418,22 @@ func resolvePURLEntries(repos []RepositoryConfig) []RepositoryConfig {
 		log.Printf("📦 Resolved pURL %s → %s", repo.PURL, repoURL)
 
 		repo.URL = repoURL
-		if version != "" && repo.Version == "" {
-			repo.Version = version
+		if version != "" {
+			repo.PURLVersion = version
 		}
-		// If no version and no branch/commit set, resolve latest tag
 		if repo.Version == "" && repo.Branch == "" && repo.Commit == "" {
-			target := resolveRepoTarget(repoURL)
-			repo.Version = target.Version
-			repo.Branch = target.Branch
-			repo.Commit = target.Commit
+			if version != "" {
+				// Resolve pURL version to a matching git tag + commit
+				target := resolvePURLVersion(repoURL, version)
+				repo.Version = target.Version
+				repo.Commit = target.Commit
+			} else {
+				// No version info at all — resolve latest tag
+				target := resolveRepoTarget(repoURL)
+				repo.Version = target.Version
+				repo.Branch = target.Branch
+				repo.Commit = target.Commit
+			}
 		}
 		resolved = append(resolved, repo)
 	}

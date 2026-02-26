@@ -362,6 +362,90 @@ func TestResolveGemRepo(t *testing.T) {
 	}
 }
 
+func TestResolveVersionTagFromOutput(t *testing.T) {
+	lsRemoteOutput := []byte(`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	refs/tags/openssl-v0.10.74
+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb	refs/tags/openssl-v0.10.75
+cccccccccccccccccccccccccccccccccccccccc	refs/tags/openssl-v0.10.75^{}
+dddddddddddddddddddddddddddddddddddddd	refs/tags/v1.0.0
+eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee	refs/tags/v2.0.0
+ffffffffffffffffffffffffffffffffffffffff	refs/tags/v2.0.0^{}
+`)
+
+	tests := []struct {
+		name       string
+		version    string
+		wantTag    string
+		wantHash   string
+	}{
+		{
+			name:     "exact match",
+			version:  "v1.0.0",
+			wantTag:  "v1.0.0",
+			wantHash: "dddddddddddddddddddddddddddddddddddddd",
+		},
+		{
+			name:     "exact match with dereferenced commit",
+			version:  "v2.0.0",
+			wantTag:  "v2.0.0",
+			wantHash: "ffffffffffffffffffffffffffffffffffffffff",
+		},
+		{
+			name:     "v-prefix added automatically",
+			version:  "1.0.0",
+			wantTag:  "v1.0.0",
+			wantHash: "dddddddddddddddddddddddddddddddddddddd",
+		},
+		{
+			name:     "suffix match with dash separator",
+			version:  "0.10.75",
+			wantTag:  "openssl-v0.10.75",
+			wantHash: "cccccccccccccccccccccccccccccccccccccccc", // dereferenced
+		},
+		{
+			name:     "suffix match version already has v prefix",
+			version:  "v0.10.75",
+			wantTag:  "openssl-v0.10.75",
+			wantHash: "cccccccccccccccccccccccccccccccccccccccc",
+		},
+		{
+			name:    "no match",
+			version: "9.9.9",
+			wantTag: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tag, hash := resolveVersionTagFromOutput("https://example.com/repo", tt.version, lsRemoteOutput)
+			if tag != tt.wantTag {
+				t.Errorf("tag = %q, want %q", tag, tt.wantTag)
+			}
+			if tt.wantHash != "" && hash != tt.wantHash {
+				t.Errorf("hash = %q, want %q", hash, tt.wantHash)
+			}
+		})
+	}
+}
+
+func TestResolveVersionTagFromOutput_SlashSeparator(t *testing.T) {
+	lsRemoteOutput := []byte(`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	refs/tags/crate/0.5.0
+`)
+	tag, hash := resolveVersionTagFromOutput("https://example.com/repo", "0.5.0", lsRemoteOutput)
+	if tag != "crate/0.5.0" {
+		t.Errorf("tag = %q, want %q", tag, "crate/0.5.0")
+	}
+	if hash != "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Errorf("hash = %q, want full hash", hash)
+	}
+}
+
+func TestResolveVersionTagFromOutput_Empty(t *testing.T) {
+	tag, hash := resolveVersionTagFromOutput("https://example.com/repo", "1.0.0", []byte(""))
+	if tag != "" || hash != "" {
+		t.Errorf("expected empty results, got tag=%q hash=%q", tag, hash)
+	}
+}
+
 func TestResolvePURLEntries(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -437,6 +521,8 @@ func TestResolvePURLEntries_VersionFromPURL(t *testing.T) {
 	if len(result) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(result))
 	}
+	// resolvePURLVersion will try git ls-remote (fails for fake URL) and
+	// fall back to using the pURL version as a literal tag name
 	if result[0].Version != "v3.0.0" {
 		t.Errorf("expected version v3.0.0, got %q", result[0].Version)
 	}

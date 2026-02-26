@@ -379,8 +379,15 @@ func runScans(config *Config) []RepoScanContext {
 		parts := strings.Split(repo.URL, "/")
 		repoName := strings.TrimSuffix(parts[len(parts)-1], ".git")
 
+		// Use the original pURL version in the SBOM filename when available,
+		// so that the user-provided version appears rather than the git tag name
+		sbomVersion := branchTag
+		if repo.PURLVersion != "" {
+			sbomVersion = repo.PURLVersion
+		}
+
 		// Generate SBOM (reused by grype via {{sbom}} template)
-		sbomPath, sbomErr := generateSBOM(config.Global.ResultsDir, repoPath, repoName, commitHash, branchTag)
+		sbomPath, sbomErr := generateSBOM(config.Global.ResultsDir, repoPath, repoName, commitHash, sbomVersion)
 		if sbomErr != nil {
 			log.Printf("  ⚠️  SBOM generation failed: %v", sbomErr)
 		}

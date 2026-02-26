@@ -75,6 +75,14 @@ func TestBuildSBOMFilename(t *testing.T) {
 			wantPrefix: "myrepo_aaa1111_",
 			wantSuffix: ".cdx.json",
 		},
+		{
+			name:       "purl version used as branchTag",
+			repoName:   "openssl",
+			commitHash: "abc1234",
+			branchTag:  "0.10.75",
+			wantPrefix: "openssl_0.10.75_abc1234_",
+			wantSuffix: ".cdx.json",
+		},
 	}
 
 	for _, tt := range tests {
