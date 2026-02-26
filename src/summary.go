@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"vuln-scanner-orchestrator/parsers"
+	"allscan/parsers"
 )
 
 // ANSI color codes for terminal output

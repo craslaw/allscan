@@ -1,4 +1,4 @@
-module vuln-scanner-orchestrator
+module allscan
 
 go 1.23
 

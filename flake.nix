@@ -36,10 +36,10 @@
         ];
 
         orchestrator = pkgs.buildGoModule {
-          pname = "vuln-scanner-orchestrator";
+          pname = "allscan";
           version = "1.0.0";
           src = ./src;
-          vendorHash = "sha256-g+yaVIx4jxpAQ/+WrGKxhVeliYx7nLQe/zsGpxV4Fn4=";
+          vendorHash = "sha256-tOucnwGew8snht4w5F+HET7cyAHF4k624hznsdS9NjY=";
 
           # Make scanners available at build time
           nativeBuildInputs = scanners;
@@ -93,7 +93,7 @@ ${scannerVersionOutput}
 
         apps.default = {
           type = "app";
-          program = "${orchestrator}/bin/vuln-scanner-orchestrator";
+          program = "${orchestrator}/bin/allscan";
         };
       }
     );
