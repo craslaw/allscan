@@ -60,10 +60,15 @@ func uploadSingleResult(config *Config, result ScanResult, authToken string) err
 	}
 	defer file.Close()
 
+	productName := extractProductName(result.Repository)
+	if config.Global.ProductOverride != "" {
+		productName = config.Global.ProductOverride
+	}
+
 	fields := map[string]string{
 		"scan_date":           time.Now().Format("2006-01-02"),
-		"product_name":        extractProductName(result.Repository),
-		"engagement_name":     fmt.Sprintf("%s-%s", extractProductName(result.Repository), result.Scanner),
+		"product_name":        productName,
+		"engagement_name":     fmt.Sprintf("%s-%s", productName, result.Scanner),
 		"scan_type":           result.DojoScanType,
 		"auto_create_context": "true",
 		"product_type_name":   "Research and Development",

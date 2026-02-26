@@ -22,11 +22,12 @@ type Config struct {
 
 // GlobalConfig holds global settings for the scanner orchestrator
 type GlobalConfig struct {
-	Workspace      string `yaml:"workspace"`
-	ResultsDir     string `yaml:"results_dir"`
-	UploadEndpoint string `yaml:"upload_endpoint"`
-	MaxConcurrent  int    `yaml:"max_concurrent"`
-	FailFast       bool   `yaml:"fail_fast"`
+	Workspace       string `yaml:"workspace"`
+	ResultsDir      string `yaml:"results_dir"`
+	UploadEndpoint  string `yaml:"upload_endpoint"`
+	MaxConcurrent   int    `yaml:"max_concurrent"`
+	FailFast        bool   `yaml:"fail_fast"`
+	ProductOverride string `yaml:"-"` // CLI-only: overrides auto-detected product name for DefectDojo
 }
 
 // ScannerConfig defines a security scanner and its execution parameters

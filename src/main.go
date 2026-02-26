@@ -415,6 +415,7 @@ func main() {
 	local := flag.Bool("local", false, "Scan current directory instead of cloning repos (skips upload)")
 	repo := flag.String("repo", "", "Scan a single repository by URL (uses latest tagged release if available)")
 	purlFlag := flag.String("purl", "", "Scan a package by its Package URL (pURL), e.g. pkg:github/owner/repo@v1.0.0")
+	product := flag.String("product", "", "Product name for DefectDojo uploads (overrides auto-detected name)")
 	flag.Parse()
 
 	// --local is incompatible with --repo and --purl
@@ -427,6 +428,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+
+	// Store CLI-only overrides in config
+	config.Global.ProductOverride = *product
 
 	// Parse timeouts
 	if err := parseTimeouts(config); err != nil {
