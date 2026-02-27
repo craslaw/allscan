@@ -28,15 +28,15 @@ Declarative security scanning for git repos
 
 Allscan automatically selects scanners based on detected repository languages. Scanners marked as "Universal" run on all repositories regardless of language.
 
-| Scanner | Type | Languages |
-|---------|------|-----------|
-| syft | SBOM | *Universal* |
-| gosec | SAST | Go |
-| osv-scanner | SCA | Go, Python, JavaScript, TypeScript, Java, C, C++, Ruby, PHP, Rust, Dart, Elixir, Haskell, R, C# |
-| grype | SCA | Go, Python, JavaScript, TypeScript, Java, C, C++, Ruby, PHP, Rust, Swift, Dart |
-| gitleaks | Secrets | *Universal* |
-| binary-detector | Binary | *Universal* |
-| scorecard | Posture | *Universal* |
+| Scanner | Type | Languages | SARIF |
+|---------|------|-----------|-------|
+| syft | SBOM | *Universal* | - |
+| gosec | SAST | Go | Yes |
+| osv-scanner | SCA | Go, Python, JavaScript, TypeScript, Java, C, C++, Ruby, PHP, Rust, Dart, Elixir, Haskell, R, C# | Yes |
+| grype | SCA | Go, Python, JavaScript, TypeScript, Java, C, C++, Ruby, PHP, Rust, Swift, Dart | Yes |
+| gitleaks | Secrets | *Universal* | Yes |
+| binary-detector | Binary | *Universal* | No |
+| scorecard | Posture | *Universal* | Yes |
 
 **Legend:**
 - **SBOM** - Software Bill of Materials (CycloneDX JSON, generated before scanners run)
@@ -46,6 +46,7 @@ Allscan automatically selects scanners based on detected repository languages. S
 - **Binary** - Binary file detection
 - **Posture** - Security posture/health metrics (OpenSSF Scorecard)
 - ***Universal*** - Runs on all repositories regardless of detected language
+- **SARIF** - Whether the scanner supports SARIF output via `--sarif` flag (scanners without SARIF support fall back to JSON)
 
 # Use
 
@@ -69,6 +70,7 @@ All commands must be run from the project root directory.
    nix run                    # Scan repositories from repositories.yaml
    nix run -- --repo https://github.com/owner/repo  # Scan a single repo (auto-detects latest release)
    nix run -- --purl "pkg:npm/express@4.18.2"       # Scan a package by its Package URL (pURL)
+   nix run -- --sarif                                # Output results in SARIF format
    ```
 
 ## Development Mode

@@ -28,6 +28,7 @@ type GlobalConfig struct {
 	MaxConcurrent   int    `yaml:"max_concurrent"`
 	FailFast        bool   `yaml:"fail_fast"`
 	ProductOverride string `yaml:"-"` // CLI-only: overrides auto-detected product name for DefectDojo
+	SarifMode       bool   `yaml:"-"` // CLI-only: output scan results in SARIF format
 }
 
 // ScannerConfig defines a security scanner and its execution parameters
@@ -35,8 +36,10 @@ type ScannerConfig struct {
 	Name         string        `yaml:"name"`
 	Enabled      bool          `yaml:"enabled"`
 	Command      string        `yaml:"command"`
-	Args         []string      `yaml:"args"`
-	ArgsLocal    []string      `yaml:"args_local"`    // Optional: override args for --local mode
+	Args           []string      `yaml:"args"`
+	ArgsLocal      []string      `yaml:"args_local"`       // Optional: override args for --local mode
+	ArgsSarif      []string      `yaml:"args_sarif"`       // Optional: override args for --sarif mode
+	ArgsSarifLocal []string      `yaml:"args_sarif_local"` // Optional: override args for --sarif --local mode
 	FilePatterns          []string      `yaml:"file_patterns"`
 	Languages             []string      `yaml:"languages"`              // Languages with full support (empty = all languages)
 	LanguagesConditional  []string      `yaml:"languages_conditional"`  // Languages with conditional support (requires specific package manager files)
@@ -68,6 +71,7 @@ type ScanResult struct {
 	DojoScanType string
 	CommitHash   string // Actual commit hash scanned (short format)
 	BranchTag    string // Branch or tag name (for DefectDojo)
+	IsSarif      bool   // True when output is SARIF format (skip JSON parsing)
 }
 
 // RepoScanContext bundles scan results with the language and scanner metadata

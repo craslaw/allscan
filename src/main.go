@@ -416,6 +416,7 @@ func main() {
 	repo := flag.String("repo", "", "Scan a single repository by URL (uses latest tagged release if available)")
 	purlFlag := flag.String("purl", "", "Scan a package by its Package URL (pURL), e.g. pkg:github/owner/repo@v1.0.0")
 	product := flag.String("product", "", "Product name for DefectDojo uploads (overrides auto-detected name)")
+	sarif := flag.Bool("sarif", false, "Output scan results in SARIF format (for scanners that support it)")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: allscan [options]\n\nOptions:\n")
 		flag.VisitAll(func(f *flag.Flag) {
@@ -441,6 +442,7 @@ func main() {
 
 	// Store CLI-only overrides in config
 	config.Global.ProductOverride = *product
+	config.Global.SarifMode = *sarif
 
 	// Parse timeouts
 	if err := parseTimeouts(config); err != nil {
@@ -546,14 +548,22 @@ func runLocalMode(config *Config, dryRun bool) {
 
 	if dryRun {
 		log.Printf("DRY RUN MODE - No scans will be executed")
+		if config.Global.SarifMode {
+			log.Printf("SARIF mode: enabled")
+		}
 		log.Printf("\nSBOM Generation:")
 		log.Printf("  Tool: syft (CycloneDX JSON)")
 		log.Printf("  Output: %s/sboms/", config.Global.ResultsDir)
 		log.Printf("\nEnabled Scanners:")
 		for _, scanner := range config.Scanners {
 			if scanner.Enabled {
-				log.Printf("  - %s (timeout: %s)", scanner.Name, scanner.Timeout)
-				log.Printf("    Command: %s %s", scanner.Command, strings.Join(scanner.Args, " "))
+				selectedArgs, isSarif := selectArgs(scanner, config.Global.SarifMode, true)
+				format := "JSON"
+				if isSarif {
+					format = "SARIF"
+				}
+				log.Printf("  - %s (timeout: %s, format: %s)", scanner.Name, scanner.Timeout, format)
+				log.Printf("    Command: %s %s", scanner.Command, strings.Join(selectedArgs, " "))
 			}
 		}
 		return
@@ -599,12 +609,20 @@ func printDryRun(config *Config) {
 	log.Printf("  Upload Endpoint: %s", config.Global.UploadEndpoint)
 	log.Printf("  Max Concurrent: %d", config.Global.MaxConcurrent)
 	log.Printf("  Fail Fast: %v", config.Global.FailFast)
+	if config.Global.SarifMode {
+		log.Printf("  SARIF Mode: enabled")
+	}
 
 	log.Printf("\nEnabled Scanners:")
 	for _, scanner := range config.Scanners {
 		if scanner.Enabled {
-			log.Printf("  - %s (timeout: %s)", scanner.Name, scanner.Timeout)
-			log.Printf("    Command: %s %s", scanner.Command, strings.Join(scanner.Args, " "))
+			selectedArgs, isSarif := selectArgs(scanner, config.Global.SarifMode, false)
+			format := "JSON"
+			if isSarif {
+				format = "SARIF"
+			}
+			log.Printf("  - %s (timeout: %s, format: %s)", scanner.Name, scanner.Timeout, format)
+			log.Printf("    Command: %s %s", scanner.Command, strings.Join(selectedArgs, " "))
 		}
 	}
 
@@ -638,7 +656,8 @@ func cleanupOldResults(resultsDir string) {
 	removed := 0
 
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+		name := entry.Name()
+		if entry.IsDir() || (!strings.HasSuffix(name, ".json") && !strings.HasSuffix(name, ".sarif")) {
 			continue
 		}
 

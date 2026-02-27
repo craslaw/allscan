@@ -144,6 +144,113 @@ func TestGetScannersForRepo(t *testing.T) {
 	}
 }
 
+func TestSelectArgs(t *testing.T) {
+	baseArgs := []string{"-fmt=json", "-out={{output}}", "./..."}
+	localArgs := []string{"-fmt=json", "-out={{output}}"}
+	sarifArgs := []string{"-fmt=sarif", "-out={{output}}", "./..."}
+	sarifLocalArgs := []string{"-fmt=sarif", "-out={{output}}"}
+
+	tests := []struct {
+		name       string
+		scanner    ScannerConfig
+		sarifMode  bool
+		localMode  bool
+		wantArgs   []string
+		wantSarif  bool
+	}{
+		{
+			name:      "json repo mode uses Args",
+			scanner:   ScannerConfig{Args: baseArgs},
+			sarifMode: false,
+			localMode: false,
+			wantArgs:  baseArgs,
+			wantSarif: false,
+		},
+		{
+			name:      "json local mode with ArgsLocal uses ArgsLocal",
+			scanner:   ScannerConfig{Args: baseArgs, ArgsLocal: localArgs},
+			sarifMode: false,
+			localMode: true,
+			wantArgs:  localArgs,
+			wantSarif: false,
+		},
+		{
+			name:      "json local mode without ArgsLocal falls back to Args",
+			scanner:   ScannerConfig{Args: baseArgs},
+			sarifMode: false,
+			localMode: true,
+			wantArgs:  baseArgs,
+			wantSarif: false,
+		},
+		{
+			name:      "sarif repo mode with ArgsSarif uses ArgsSarif",
+			scanner:   ScannerConfig{Args: baseArgs, ArgsSarif: sarifArgs},
+			sarifMode: true,
+			localMode: false,
+			wantArgs:  sarifArgs,
+			wantSarif: true,
+		},
+		{
+			name:      "sarif repo mode without ArgsSarif falls back to Args",
+			scanner:   ScannerConfig{Args: baseArgs},
+			sarifMode: true,
+			localMode: false,
+			wantArgs:  baseArgs,
+			wantSarif: false,
+		},
+		{
+			name:      "sarif local mode with ArgsSarifLocal uses ArgsSarifLocal",
+			scanner:   ScannerConfig{Args: baseArgs, ArgsLocal: localArgs, ArgsSarif: sarifArgs, ArgsSarifLocal: sarifLocalArgs},
+			sarifMode: true,
+			localMode: true,
+			wantArgs:  sarifLocalArgs,
+			wantSarif: true,
+		},
+		{
+			name:      "sarif local mode with ArgsSarif only uses ArgsSarif",
+			scanner:   ScannerConfig{Args: baseArgs, ArgsLocal: localArgs, ArgsSarif: sarifArgs},
+			sarifMode: true,
+			localMode: true,
+			wantArgs:  sarifArgs,
+			wantSarif: true,
+		},
+		{
+			name:      "sarif local mode without any sarif args falls back to ArgsLocal",
+			scanner:   ScannerConfig{Args: baseArgs, ArgsLocal: localArgs},
+			sarifMode: true,
+			localMode: true,
+			wantArgs:  localArgs,
+			wantSarif: false,
+		},
+		{
+			name:      "sarif local mode without any sarif or local args falls back to Args",
+			scanner:   ScannerConfig{Args: baseArgs},
+			sarifMode: true,
+			localMode: true,
+			wantArgs:  baseArgs,
+			wantSarif: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotArgs, gotSarif := selectArgs(tt.scanner, tt.sarifMode, tt.localMode)
+			if len(gotArgs) != len(tt.wantArgs) {
+				t.Errorf("selectArgs() args = %v, want %v", gotArgs, tt.wantArgs)
+				return
+			}
+			for i := range gotArgs {
+				if gotArgs[i] != tt.wantArgs[i] {
+					t.Errorf("selectArgs() args[%d] = %q, want %q", i, gotArgs[i], tt.wantArgs[i])
+				}
+			}
+			if gotSarif != tt.wantSarif {
+				t.Errorf("selectArgs() isSarif = %v, want %v", gotSarif, tt.wantSarif)
+			}
+		})
+	}
+}
+
 func TestCheckRequiredEnv(t *testing.T) {
 	tests := []struct {
 		name     string
