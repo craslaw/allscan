@@ -57,6 +57,21 @@ func checkRequiredEnv(required []string) string {
 	return ""
 }
 
+// isLocalRepo returns true if the repository uses the local:// URL scheme.
+func isLocalRepo(repo RepositoryConfig) bool {
+	return strings.HasPrefix(repo.URL, "local://")
+}
+
+// repoName extracts a short name from the repository config.
+// For local repos it returns the directory base name; for remote URLs the last path segment.
+func repoName(repo RepositoryConfig) string {
+	if isLocalRepo(repo) {
+		return filepath.Base(strings.TrimPrefix(repo.URL, "local://"))
+	}
+	parts := strings.Split(repo.URL, "/")
+	return strings.TrimSuffix(parts[len(parts)-1], ".git")
+}
+
 // runScannersOnRepo executes all applicable scanners against a single repository
 func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath, commitHash, branchTag, sbomPath string) RepoScanContext {
 	var results []ScanResult
@@ -90,217 +105,6 @@ func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath, commitHa
 		Languages: detected,
 		Scanners:  scannersToRun,
 		SBOMPath:  sbomPath,
-	}
-}
-
-// runLocalScans executes all enabled scanners against the current directory
-func runLocalScans(config *Config, repoPath string, repoName string, sbomPath string) RepoScanContext {
-	var results []ScanResult
-
-	log.Printf("\n📂 Scanning local directory: %s", repoPath)
-
-	// Detect languages in the directory (local mode always uses filesystem)
-	detected, err := detectLanguages(repoPath, "")
-	if err != nil {
-		log.Printf("  ⚠️  Failed to detect languages: %v", err)
-		detected = &DetectedLanguages{Languages: []string{}, FileCounts: map[string]int{}}
-	} else {
-		logDetectedLanguages(detected)
-	}
-
-	// Create a fake repo config for the local directory
-	localRepo := RepositoryConfig{
-		URL:    "local://" + repoPath,
-		Branch: "local",
-	}
-
-	// Get scanners compatible with detected languages
-	scannersToRun := getScannersForRepo(config, localRepo, detected)
-
-	// Run each scanner
-	for _, scanner := range scannersToRun {
-		result := runScannerLocal(config, scanner, localRepo, repoPath, repoName, sbomPath)
-		results = append(results, result)
-
-		if !result.Success && config.Global.FailFast {
-			log.Printf("⚠️  Fail-fast enabled, stopping after error")
-			break
-		}
-	}
-
-	return RepoScanContext{
-		RepoURL:   localRepo.URL,
-		Results:   results,
-		Languages: detected,
-		Scanners:  scannersToRun,
-		SBOMPath:  sbomPath,
-	}
-}
-
-// runScannerLocal executes a single scanner against a local directory
-func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfig, repoPath string, repoName string, sbomPath string) ScanResult {
-	start := time.Now()
-
-	// Select args based on SARIF and local mode
-	selectedArgs, isSarif := selectArgs(scanner, config.Global.SarifMode, true)
-
-	// Check required environment variables before doing any work
-	if missing := checkRequiredEnv(scanner.RequiredEnv); missing != "" {
-		log.Printf("    ⏭️  Skipping %s: required env var %s not set", scanner.Name, missing)
-		return ScanResult{
-			Scanner:      scanner.Name,
-			Repository:   repo.URL,
-			Success:      false,
-			Error:        fmt.Errorf("required environment variable %s not set", missing),
-			Duration:     time.Since(start),
-			DojoScanType: scanner.DojoScanType,
-		}
-	}
-
-	// Create output path with appropriate extension
-	timestamp := time.Now().Format("20060102-150405")
-	ext := ".json"
-	if isSarif {
-		ext = ".sarif"
-	}
-	outputFilename := fmt.Sprintf("%s_%s_%s%s", repoName, scanner.Name, timestamp, ext)
-
-	// Convert to absolute path
-	resultsDir, err := filepath.Abs(config.Global.ResultsDir)
-	if err != nil {
-		resultsDir = config.Global.ResultsDir
-	}
-	outputPath := filepath.Join(resultsDir, outputFilename)
-
-	// Ensure output directory exists
-	if err := os.MkdirAll(resultsDir, 0750); err != nil {
-		log.Printf("    ❌ Failed to create results directory %s: %v", resultsDir, err)
-		return ScanResult{
-			Scanner:      scanner.Name,
-			Repository:   repo.URL,
-			OutputPath:   outputPath,
-			Success:      false,
-			Error:        fmt.Errorf("creating results directory: %w", err),
-			Duration:     time.Since(start),
-			DojoScanType: scanner.DojoScanType,
-		}
-	}
-
-	log.Printf("  🔎 Running %s...", scanner.Name)
-
-	// Handle built-in scanners
-	if scanner.Command == "builtin:binary-detector" {
-		builtinSarif := config.Global.SarifMode
-		actualOutputPath := outputPath
-		if builtinSarif {
-			actualOutputPath = strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".sarif"
-		}
-		count, err := parsers.RunBinaryDetector(repoPath, actualOutputPath, builtinSarif)
-		duration := time.Since(start)
-		if err != nil {
-			log.Printf("    ❌ %s failed: %v", scanner.Name, err)
-			return ScanResult{
-				Scanner:      scanner.Name,
-				Repository:   repo.URL,
-				OutputPath:   actualOutputPath,
-				Success:      false,
-				Error:        err,
-				Duration:     duration,
-				DojoScanType: scanner.DojoScanType,
-			}
-		}
-		if count > 0 {
-			log.Printf("    ✅ %s completed in %v (found %d binaries)", scanner.Name, duration, count)
-		} else {
-			log.Printf("    ✅ %s completed in %v", scanner.Name, duration)
-		}
-		return ScanResult{
-			Scanner:      scanner.Name,
-			Repository:   repo.URL,
-			OutputPath:   actualOutputPath,
-			Success:      true,
-			Duration:     duration,
-			DojoScanType: scanner.DojoScanType,
-			IsSarif:      builtinSarif,
-		}
-	}
-
-	// Check if scanner binary exists
-	if _, err := exec.LookPath(scanner.Command); err != nil {
-		log.Printf("    ❌ Scanner %s not found in PATH", scanner.Command)
-		return ScanResult{
-			Scanner:      scanner.Name,
-			Repository:   repo.URL,
-			OutputPath:   outputPath,
-			Success:      false,
-			Error:        fmt.Errorf("scanner not found: %w", err),
-			Duration:     time.Since(start),
-			DojoScanType: scanner.DojoScanType,
-		}
-	}
-
-	// Prepare arguments with template substitution
-	args := make([]string, len(selectedArgs))
-	for i, arg := range selectedArgs {
-		arg = strings.ReplaceAll(arg, "{{output}}", outputPath)
-		arg = strings.ReplaceAll(arg, "{{repo}}", repo.URL)
-		arg = strings.ReplaceAll(arg, "{{sbom}}", sbomPath)
-		args[i] = arg
-	}
-
-	// Create command with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), scanner.timeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, scanner.Command, args...)
-	cmd.Dir = repoPath
-
-	// Capture output
-	output, err := cmd.CombinedOutput()
-
-	duration := time.Since(start)
-
-	if err != nil {
-		// Some scanners return non-zero on findings, check if output file was created
-		if _, statErr := os.Stat(outputPath); statErr == nil {
-			log.Printf("    ✅ %s completed in %v (with findings)", scanner.Name, duration)
-			return ScanResult{
-				Scanner:      scanner.Name,
-				Repository:   repo.URL,
-				OutputPath:   outputPath,
-				Success:      true,
-				Duration:     duration,
-				DojoScanType: scanner.DojoScanType,
-				IsSarif:      isSarif,
-			}
-		}
-
-		log.Printf("    ❌ %s failed: %v", scanner.Name, err)
-		if len(output) > 0 {
-			log.Printf("    Output: %s", string(output))
-		}
-
-		return ScanResult{
-			Scanner:      scanner.Name,
-			Repository:   repo.URL,
-			OutputPath:   outputPath,
-			Success:      false,
-			Error:        err,
-			Duration:     duration,
-			DojoScanType: scanner.DojoScanType,
-			IsSarif:      isSarif,
-		}
-	}
-
-	log.Printf("    ✅ %s completed in %v", scanner.Name, duration)
-	return ScanResult{
-		Scanner:      scanner.Name,
-		Repository:   repo.URL,
-		OutputPath:   outputPath,
-		Success:      true,
-		Duration:     duration,
-		DojoScanType: scanner.DojoScanType,
-		IsSarif:      isSarif,
 	}
 }
 
@@ -367,8 +171,9 @@ func isScannerCompatible(scanner ScannerConfig, detected *DetectedLanguages) boo
 func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, repoPath, commitHash, branchTag, sbomPath string) ScanResult {
 	start := time.Now()
 
-	// Select args based on SARIF mode (repo mode, not local)
-	selectedArgs, isSarif := selectArgs(scanner, config.Global.SarifMode, false)
+	// Select args based on SARIF and local mode
+	localMode := isLocalRepo(repo)
+	selectedArgs, isSarif := selectArgs(scanner, config.Global.SarifMode, localMode)
 
 	// Check required environment variables before doing any work
 	if missing := checkRequiredEnv(scanner.RequiredEnv); missing != "" {
@@ -386,8 +191,7 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	}
 
 	// Extract repo name for output file
-	parts := strings.Split(repo.URL, "/")
-	repoName := strings.TrimSuffix(parts[len(parts)-1], ".git")
+	name := repoName(repo)
 
 	// Create output path with appropriate extension
 	timestamp := time.Now().Format("20060102-150405")
@@ -395,7 +199,7 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	if isSarif {
 		ext = ".sarif"
 	}
-	outputFilename := fmt.Sprintf("%s_%s_%s%s", repoName, scanner.Name, timestamp, ext)
+	outputFilename := fmt.Sprintf("%s_%s_%s%s", name, scanner.Name, timestamp, ext)
 
 	// Convert to absolute path
 	resultsDir, err := filepath.Abs(config.Global.ResultsDir)

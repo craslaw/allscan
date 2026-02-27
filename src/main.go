@@ -589,8 +589,16 @@ func runLocalMode(config *Config, dryRun bool) {
 		log.Printf("  ⚠️  SBOM generation failed: %v", sbomErr)
 	}
 
+	// Create a local repo config for the current directory
+	localRepo := RepositoryConfig{
+		URL:    "local://" + cwd,
+		Branch: "local",
+	}
+
+	log.Printf("\n📂 Scanning local directory: %s", cwd)
+
 	// Run scans on current directory
-	ctx := runLocalScans(config, cwd, dirName, sbomPath)
+	ctx := runScannersOnRepo(config, localRepo, cwd, "", "", sbomPath)
 
 	// Print summary
 	printSummary([]RepoScanContext{ctx})
