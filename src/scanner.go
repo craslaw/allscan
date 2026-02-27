@@ -190,14 +190,19 @@ func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfi
 
 	// Handle built-in scanners
 	if scanner.Command == "builtin:binary-detector" {
-		count, err := parsers.RunBinaryDetector(repoPath, outputPath)
+		builtinSarif := config.Global.SarifMode
+		actualOutputPath := outputPath
+		if builtinSarif {
+			actualOutputPath = strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".sarif"
+		}
+		count, err := parsers.RunBinaryDetector(repoPath, actualOutputPath, builtinSarif)
 		duration := time.Since(start)
 		if err != nil {
 			log.Printf("    ❌ %s failed: %v", scanner.Name, err)
 			return ScanResult{
 				Scanner:      scanner.Name,
 				Repository:   repo.URL,
-				OutputPath:   outputPath,
+				OutputPath:   actualOutputPath,
 				Success:      false,
 				Error:        err,
 				Duration:     duration,
@@ -212,10 +217,11 @@ func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfi
 		return ScanResult{
 			Scanner:      scanner.Name,
 			Repository:   repo.URL,
-			OutputPath:   outputPath,
+			OutputPath:   actualOutputPath,
 			Success:      true,
 			Duration:     duration,
 			DojoScanType: scanner.DojoScanType,
+			IsSarif:      builtinSarif,
 		}
 	}
 
@@ -418,14 +424,19 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 
 	// Handle built-in scanners
 	if scanner.Command == "builtin:binary-detector" {
-		count, err := parsers.RunBinaryDetector(repoPath, outputPath)
+		builtinSarif := config.Global.SarifMode
+		actualOutputPath := outputPath
+		if builtinSarif {
+			actualOutputPath = strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".sarif"
+		}
+		count, err := parsers.RunBinaryDetector(repoPath, actualOutputPath, builtinSarif)
 		duration := time.Since(start)
 		if err != nil {
 			log.Printf("    ❌ %s failed: %v", scanner.Name, err)
 			return ScanResult{
 				Scanner:      scanner.Name,
 				Repository:   repo.URL,
-				OutputPath:   outputPath,
+				OutputPath:   actualOutputPath,
 				Success:      false,
 				Error:        err,
 				Duration:     duration,
@@ -442,12 +453,13 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 		return ScanResult{
 			Scanner:      scanner.Name,
 			Repository:   repo.URL,
-			OutputPath:   outputPath,
+			OutputPath:   actualOutputPath,
 			Success:      true,
 			Duration:     duration,
 			DojoScanType: scanner.DojoScanType,
 			CommitHash:   commitHash,
 			BranchTag:    branchTag,
+			IsSarif:      builtinSarif,
 		}
 	}
 

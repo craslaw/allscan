@@ -66,9 +66,55 @@ var binaryExtensions = map[string]bool{
 	".wasm": true, ".node": true,
 }
 
-// RunBinaryDetector scans for binary files and writes JSON output.
+// SARIF 2.1.0 structs (minimal, only what's needed for binary-detector output)
+type sarifLog struct {
+	Schema  string     `json:"$schema"`
+	Version string     `json:"version"`
+	Runs    []sarifRun `json:"runs"`
+}
+type sarifRun struct {
+	Tool    sarifTool     `json:"tool"`
+	Results []sarifResult `json:"results"`
+}
+type sarifTool struct {
+	Driver sarifDriver `json:"driver"`
+}
+type sarifDriver struct {
+	Name  string      `json:"name"`
+	Rules []sarifRule `json:"rules"`
+}
+type sarifRule struct {
+	ID               string             `json:"id"`
+	Name             string             `json:"name"`
+	ShortDescription sarifMessage       `json:"shortDescription"`
+	DefaultConfig    sarifDefaultConfig `json:"defaultConfiguration"`
+}
+type sarifDefaultConfig struct {
+	Level string `json:"level"`
+}
+type sarifResult struct {
+	RuleID    string          `json:"ruleId"`
+	Level     string          `json:"level"`
+	Message   sarifMessage    `json:"message"`
+	Locations []sarifLocation `json:"locations"`
+}
+type sarifMessage struct {
+	Text string `json:"text"`
+}
+type sarifLocation struct {
+	PhysicalLocation sarifPhysicalLocation `json:"physicalLocation"`
+}
+type sarifPhysicalLocation struct {
+	ArtifactLocation sarifArtifactLocation `json:"artifactLocation"`
+}
+type sarifArtifactLocation struct {
+	URI       string `json:"uri"`
+	URIBaseID string `json:"uriBaseId"`
+}
+
+// RunBinaryDetector scans for binary files and writes JSON or SARIF output.
 // Returns the count of binaries found.
-func RunBinaryDetector(repoPath string, outputPath string) (int, error) {
+func RunBinaryDetector(repoPath string, outputPath string, sarifMode bool) (int, error) {
 	var binaries []BinaryFile
 
 	err := filepath.WalkDir(repoPath, func(path string, d fs.DirEntry, err error) error {
@@ -129,15 +175,61 @@ func RunBinaryDetector(repoPath string, outputPath string) (int, error) {
 		return 0, err
 	}
 
-	// Write JSON output
-	output := BinaryOutput{
-		Binaries: binaries,
-		Total:    len(binaries),
-	}
-
-	data, err := json.MarshalIndent(output, "", "  ")
-	if err != nil {
-		return 0, err
+	var data []byte
+	if sarifMode {
+		// Build SARIF output
+		results := make([]sarifResult, 0, len(binaries))
+		for _, b := range binaries {
+			results = append(results, sarifResult{
+				RuleID: "BINARY001",
+				Level:  "warning",
+				Message: sarifMessage{
+					Text: "Binary file detected: " + b.Reason,
+				},
+				Locations: []sarifLocation{{
+					PhysicalLocation: sarifPhysicalLocation{
+						ArtifactLocation: sarifArtifactLocation{
+							URI:       b.Path,
+							URIBaseID: "%SRCROOT%",
+						},
+					},
+				}},
+			})
+		}
+		log := sarifLog{
+			Schema:  "https://json.schemastore.org/sarif-2.1.0.json",
+			Version: "2.1.0",
+			Runs: []sarifRun{{
+				Tool: sarifTool{
+					Driver: sarifDriver{
+						Name: "binary-detector",
+						Rules: []sarifRule{{
+							ID:               "BINARY001",
+							Name:             "BinaryFileDetected",
+							ShortDescription: sarifMessage{Text: "Binary file detected in repository"},
+							DefaultConfig:    sarifDefaultConfig{Level: "warning"},
+						}},
+					},
+				},
+				Results: results,
+			}},
+		}
+		var err error
+		data, err = json.MarshalIndent(log, "", "  ")
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		// Write JSON output
+		output := BinaryOutput{
+			Binaries: binaries,
+			Total:    len(binaries),
+		}
+		var err error
+		data, err = json.MarshalIndent(output, "", "  ")
+		if err != nil {
+			return 0, err
+		}
 	}
 
 	if err := os.WriteFile(outputPath, data, 0640); err != nil {
