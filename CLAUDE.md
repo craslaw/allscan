@@ -22,6 +22,9 @@ nix run -- --purl "pkg:npm/express@4.18.2"
 # Run in local mode (scan current directory, no upload)
 nix run -- --local
 
+# Output results in SARIF format (for scanners that support it)
+nix run -- --sarif
+
 # Dry run (show what would be executed without running)
 nix run -- --dry-run
 
@@ -92,6 +95,7 @@ When adding a new scanner, you MUST complete ALL of the following steps:
    - Set `dojo_scan_type` for DefectDojo integration
    - Add `languages` array (empty `[]` for universal scanners)
    - Add `required_env` if API tokens are needed
+   - If the scanner supports SARIF output, add `args_sarif` (and `args_sarif_local` if `args_local` is defined) with the SARIF format flags
 
 5. **Update documentation**:
    - Add scanner to README.md compatibility matrix
@@ -126,6 +130,9 @@ new-scanner = pkgs.buildNpmPackage {
 - `{{sbom}}` template is replaced with the generated SBOM path (used by grype: `sbom:{{sbom}}`)
 - `{{repo}}` template is replaced with the repository URL
 - `args_local` overrides `args` in `--local` mode (e.g., gitleaks respects .gitignore locally)
+- `args_sarif` overrides `args` in `--sarif` mode (switches output format to SARIF)
+- `args_sarif_local` overrides `args_sarif` in `--sarif --local` mode
+- Priority chain: `args_sarif_local` > `args_sarif` > `args_local` > `args`
 
 ## Documentation Maintenance
 

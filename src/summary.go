@@ -73,6 +73,18 @@ func printSummary(contexts []RepoScanContext) {
 				continue
 			}
 
+			// SARIF results can't be parsed by JSON parsers — show path instead
+			if result.IsSarif {
+				parser, ok := parsers.Get(result.Scanner)
+				if ok {
+					fmt.Printf("  %s %s%s%s (%s%s%s)\n", parser.Icon(), ColorBold, parser.Name(), ColorReset, ColorDim, parser.Type(), ColorReset)
+				} else {
+					fmt.Printf("  🔧 %s%s%s\n", ColorBold, result.Scanner, ColorReset)
+				}
+				fmt.Printf("     %sSARIF output saved: %s%s\n", ColorDim, result.OutputPath, ColorReset)
+				continue
+			}
+
 			// Parse the scan output using the appropriate parser
 			summary, parser := parseScanOutput(result)
 			if parser != nil {

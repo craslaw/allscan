@@ -13,6 +13,39 @@ import (
 	"allscan/parsers"
 )
 
+// selectArgs picks the right args for a scanner based on SARIF and local mode.
+// Priority chain:
+//   SARIF+local: args_sarif_local > args_sarif > args_local > args
+//   SARIF+repo:  args_sarif > args
+//   JSON+local:  args_local > args
+//   JSON+repo:   args
+// Returns (args, isSarif) where isSarif is true only when SARIF-specific args were selected.
+func selectArgs(scanner ScannerConfig, sarifMode, localMode bool) ([]string, bool) {
+	if sarifMode {
+		if localMode {
+			if len(scanner.ArgsSarifLocal) > 0 {
+				return scanner.ArgsSarifLocal, true
+			}
+			if len(scanner.ArgsSarif) > 0 {
+				return scanner.ArgsSarif, true
+			}
+			// Fall back to non-SARIF local/default args
+			if len(scanner.ArgsLocal) > 0 {
+				return scanner.ArgsLocal, false
+			}
+			return scanner.Args, false
+		}
+		if len(scanner.ArgsSarif) > 0 {
+			return scanner.ArgsSarif, true
+		}
+		return scanner.Args, false
+	}
+	if localMode && len(scanner.ArgsLocal) > 0 {
+		return scanner.ArgsLocal, false
+	}
+	return scanner.Args, false
+}
+
 // checkRequiredEnv verifies that all required environment variables are set.
 // Returns the name of the first missing variable, or empty string if all are set.
 func checkRequiredEnv(required []string) string {
@@ -108,6 +141,9 @@ func runLocalScans(config *Config, repoPath string, repoName string, sbomPath st
 func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfig, repoPath string, repoName string, sbomPath string) ScanResult {
 	start := time.Now()
 
+	// Select args based on SARIF and local mode
+	selectedArgs, isSarif := selectArgs(scanner, config.Global.SarifMode, true)
+
 	// Check required environment variables before doing any work
 	if missing := checkRequiredEnv(scanner.RequiredEnv); missing != "" {
 		log.Printf("    ⏭️  Skipping %s: required env var %s not set", scanner.Name, missing)
@@ -121,9 +157,13 @@ func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfi
 		}
 	}
 
-	// Create output path
+	// Create output path with appropriate extension
 	timestamp := time.Now().Format("20060102-150405")
-	outputFilename := fmt.Sprintf("%s_%s_%s.json", repoName, scanner.Name, timestamp)
+	ext := ".json"
+	if isSarif {
+		ext = ".sarif"
+	}
+	outputFilename := fmt.Sprintf("%s_%s_%s%s", repoName, scanner.Name, timestamp, ext)
 
 	// Convert to absolute path
 	resultsDir, err := filepath.Abs(config.Global.ResultsDir)
@@ -193,15 +233,9 @@ func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfi
 		}
 	}
 
-	// Use local args if defined, otherwise fall back to standard args
-	sourceArgs := scanner.Args
-	if len(scanner.ArgsLocal) > 0 {
-		sourceArgs = scanner.ArgsLocal
-	}
-
 	// Prepare arguments with template substitution
-	args := make([]string, len(sourceArgs))
-	for i, arg := range sourceArgs {
+	args := make([]string, len(selectedArgs))
+	for i, arg := range selectedArgs {
 		arg = strings.ReplaceAll(arg, "{{output}}", outputPath)
 		arg = strings.ReplaceAll(arg, "{{repo}}", repo.URL)
 		arg = strings.ReplaceAll(arg, "{{sbom}}", sbomPath)
@@ -231,6 +265,7 @@ func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfi
 				Success:      true,
 				Duration:     duration,
 				DojoScanType: scanner.DojoScanType,
+				IsSarif:      isSarif,
 			}
 		}
 
@@ -247,6 +282,7 @@ func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfi
 			Error:        err,
 			Duration:     duration,
 			DojoScanType: scanner.DojoScanType,
+			IsSarif:      isSarif,
 		}
 	}
 
@@ -258,6 +294,7 @@ func runScannerLocal(config *Config, scanner ScannerConfig, repo RepositoryConfi
 		Success:      true,
 		Duration:     duration,
 		DojoScanType: scanner.DojoScanType,
+		IsSarif:      isSarif,
 	}
 }
 
@@ -324,6 +361,9 @@ func isScannerCompatible(scanner ScannerConfig, detected *DetectedLanguages) boo
 func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, repoPath, commitHash, branchTag, sbomPath string) ScanResult {
 	start := time.Now()
 
+	// Select args based on SARIF mode (repo mode, not local)
+	selectedArgs, isSarif := selectArgs(scanner, config.Global.SarifMode, false)
+
 	// Check required environment variables before doing any work
 	if missing := checkRequiredEnv(scanner.RequiredEnv); missing != "" {
 		log.Printf("    ⏭️  Skipping %s: required env var %s not set", scanner.Name, missing)
@@ -343,9 +383,13 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	parts := strings.Split(repo.URL, "/")
 	repoName := strings.TrimSuffix(parts[len(parts)-1], ".git")
 
-	// Create output path
+	// Create output path with appropriate extension
 	timestamp := time.Now().Format("20060102-150405")
-	outputFilename := fmt.Sprintf("%s_%s_%s.json", repoName, scanner.Name, timestamp)
+	ext := ".json"
+	if isSarif {
+		ext = ".sarif"
+	}
+	outputFilename := fmt.Sprintf("%s_%s_%s%s", repoName, scanner.Name, timestamp, ext)
 
 	// Convert to absolute path
 	resultsDir, err := filepath.Abs(config.Global.ResultsDir)
@@ -424,8 +468,8 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	}
 
 	// Prepare arguments with template substitution
-	args := make([]string, len(scanner.Args))
-	for i, arg := range scanner.Args {
+	args := make([]string, len(selectedArgs))
+	for i, arg := range selectedArgs {
 		arg = strings.ReplaceAll(arg, "{{output}}", outputPath)
 		arg = strings.ReplaceAll(arg, "{{repo}}", repo.URL)
 		arg = strings.ReplaceAll(arg, "{{sbom}}", sbomPath)
@@ -457,6 +501,7 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 				DojoScanType: scanner.DojoScanType,
 				CommitHash:   commitHash,
 				BranchTag:    branchTag,
+				IsSarif:      isSarif,
 			}
 		}
 
@@ -475,6 +520,7 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 			DojoScanType: scanner.DojoScanType,
 			CommitHash:   commitHash,
 			BranchTag:    branchTag,
+			IsSarif:      isSarif,
 		}
 	}
 
@@ -488,5 +534,6 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 		DojoScanType: scanner.DojoScanType,
 		CommitHash:   commitHash,
 		BranchTag:    branchTag,
+		IsSarif:      isSarif,
 	}
 }
