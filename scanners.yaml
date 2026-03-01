@@ -213,6 +213,18 @@ scanners:
     languages: []
     timeout: "5m"
 
+  - name: "govulncheck"
+    enabled: true
+    dojo_scan_type: "Govulncheck Scanner"
+    command: "govulncheck"
+    args:
+      - "-format"
+      - "json"
+      - "./..."
+    languages:
+      - "go"
+    timeout: "5m"
+
   - name: "golangci-lint"
     enabled: false  # Disabled by default
     dojo_scan_type: "Golangci-lint"

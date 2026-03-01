@@ -19,6 +19,7 @@
           osv-scanner = { pkg = pkgs.osv-scanner; url = "https://github.com/google/osv-scanner"; };
           grype = { pkg = pkgs.grype; url = "https://github.com/anchore/grype"; };
           syft = { pkg = pkgs.syft; url = "https://github.com/anchore/syft"; };
+          govulncheck = { pkg = pkgs.govulncheck; url = "https://github.com/golang/vuln"; };
         };
 
         # Generate YAML entries for scanner packages

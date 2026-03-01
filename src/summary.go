@@ -94,6 +94,8 @@ func printSummary(contexts []RepoScanContext) {
 						fmt.Printf("  %s❌ %s%s: %sFailed to print report%s - %v\n",
 							ColorRed, result.Scanner, ColorReset, ColorRed, ColorReset, err)
 					}
+				} else if parser.Type() == "Reachability" {
+					printReachabilitySummary(parser, summary)
 				} else {
 					printScannerSummary(parser, summary)
 				}
@@ -139,7 +141,7 @@ func computeCoverage(ctx RepoScanContext) map[string]map[string]CoverageState {
 	}
 
 	// Collect the scan types we care about (from parsers, excluding Scorecard)
-	scanTypes := []string{"SCA", "SAST"}
+	scanTypes := []string{"SCA", "SAST", "Reachability"}
 
 	// Initialize the matrix: every (language, scanType) starts as CoverageNone
 	coverage := make(map[string]map[string]CoverageState)
@@ -250,7 +252,10 @@ func printCoverageMatrix(ctx RepoScanContext) {
 		return languages[i] < languages[j]
 	})
 
-	scanTypes := []string{"SCA", "SAST"}
+	scanTypes := []string{"SCA", "SAST", "Reachability"}
+
+	// Display labels for column headers (short names for narrow columns)
+	scanTypeLabels := map[string]string{"SCA": "SCA", "SAST": "SAST", "Reachability": "Reach"}
 
 	// Build percentage strings and compute widths for vertical alignment
 	pctStrs := make(map[string]string, len(languages))
@@ -297,7 +302,11 @@ func printCoverageMatrix(ctx RepoScanContext) {
 	fmt.Printf("\n  %s%sLanguage Coverage%s\n", ColorBold, ColorCyan, ColorReset)
 	fmt.Printf("  %-*s", langWidth, "Language")
 	for _, st := range scanTypes {
-		fmt.Printf("  %-*s", colWidth, st)
+		label := st
+		if l, ok := scanTypeLabels[st]; ok {
+			label = l
+		}
+		fmt.Printf("  %-*s", colWidth, label)
 	}
 	fmt.Println()
 
@@ -449,4 +458,24 @@ func printScannerSummary(parser parsers.ResultParser, summary parsers.FindingSum
 	// Print findings
 	fmt.Printf("     %s\n", strings.Join(findings, "  "))
 	fmt.Printf("     %sTotal: %d findings%s\n", ColorDim, summary.Total, ColorReset)
+}
+
+// printReachabilitySummary displays reachability analysis results
+func printReachabilitySummary(parser parsers.ResultParser, summary parsers.FindingSummary) {
+	fmt.Printf("  %s %s%s%s (%s%s%s)\n", parser.Icon(), ColorBold, parser.Name(), ColorReset, ColorDim, parser.Type(), ColorReset)
+
+	if summary.Total == 0 {
+		fmt.Printf("     %s✨ No vulnerabilities found%s\n", ColorGreen, ColorReset)
+		return
+	}
+
+	if summary.Critical > 0 {
+		fmt.Printf("     %s🔴 Reachable: %d%s %s(called — fix these first)%s\n",
+			ColorRed, summary.Critical, ColorReset, ColorDim, ColorReset)
+	}
+	if summary.Info > 0 {
+		fmt.Printf("     ⚪ Unreachable: %d %s(imported/dependency only)%s\n",
+			summary.Info, ColorDim, ColorReset)
+	}
+	fmt.Printf("     %sTotal: %d unique vulnerabilities%s\n", ColorDim, summary.Total, ColorReset)
 }

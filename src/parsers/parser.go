@@ -18,7 +18,7 @@ type ResultParser interface {
 	// Parse reads scanner output and returns a summary of findings
 	Parse(data []byte) (FindingSummary, error)
 
-	// Type returns the scanner category: "SCA", "SAST", or "Secrets"
+	// Type returns the scanner category: "SCA", "SAST", "Secrets", or "Reachability"
 	Type() string
 
 	// Icon returns an emoji icon for display
@@ -54,6 +54,7 @@ var registry = map[string]ResultParser{
 	"gitleaks":        &GitleaksParser{},
 	"binary-detector": &BinaryParser{},
 	"scorecard":       &ScorecardParser{},
+	"govulncheck":     &GovulncheckParser{},
 }
 
 // Get returns the appropriate parser for a scanner name.

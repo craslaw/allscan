@@ -61,13 +61,14 @@ Allscan is a declarative security scanning orchestrator written in Go and manage
 - `src/purl.go` - Package URL (pURL) parsing and repository resolution
 - `src/upload.go` - DefectDojo upload using fluent builder pattern
 - `src/summary.go` - Colorful terminal output with ANSI codes
+- `src/parsers/reachability.go` - Govulncheck reachability analysis parser (NDJSON)
 - `src/parsers/` - Interface-based parser system for scanner outputs
 - `scanners.yaml` - Scanner definitions (in root)
 - `repositories.yaml` - Target repositories (in root)
 
 **Parser System:**
 - `src/parsers/parser.go` - `ResultParser` interface and registry
-- Parsers implement `Parse()`, `Type()` (SCA/SAST/Secrets), `Icon()`, `Name()`
+- Parsers implement `Parse()`, `Type()` (SCA/SAST/Secrets/Reachability), `Icon()`, `Name()`
 - Registry maps scanner names to implementations via `parsers.Get()`
 
 **Adding a New Scanner:**

@@ -13,6 +13,7 @@ Allscan automatically selects scanners based on detected repository languages. S
 | gosec | SAST | Go | Yes |
 | osv-scanner | SCA | Go, Python, JavaScript, TypeScript, Java, C, C++, Ruby, PHP, Rust, Dart, Elixir, Haskell, R, C# | Yes |
 | grype | SCA | Go, Python, JavaScript, TypeScript, Java, C, C++, Ruby, PHP, Rust, Swift, Dart | Yes |
+| govulncheck | Reachability | Go | No |
 | gitleaks | Secrets | *Universal* | Yes |
 | binary-detector | Binary | *Universal* | No |
 | scorecard | Posture | *Universal* | Yes |
@@ -21,6 +22,7 @@ Allscan automatically selects scanners based on detected repository languages. S
 - **SBOM** - Software Bill of Materials (CycloneDX JSON, generated before scanners run)
 - **SAST** - Static Application Security Testing (source code analysis)
 - **SCA** - Software Composition Analysis (dependency vulnerabilities)
+- **Reachability** - Vulnerability reachability analysis (determines if vulnerable code paths are actually called)
 - **Secrets** - Credential and secret detection
 - **Binary** - Binary file detection
 - **Posture** - Security posture/health metrics (OpenSSF Scorecard)
