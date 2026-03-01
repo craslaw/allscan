@@ -1,5 +1,5 @@
-Interface-Based Scanner Architecture                                 
-                                                                       
+# Interface-Based Scanner Architecture
+```
   ┌─────────────────────────────────────────────────────────────────┐  
   │                      ResultParser (interface)                   │  
   │  ├── Parse(data []byte) (FindingSummary, error)                 │   
@@ -38,7 +38,7 @@ Interface-Based Scanner Architecture
   ├────────────────┼─────────────────────────────────────────────────┤ 
   │ GetParser()    │ Factory function to get the right parser        │ 
   └────────────────┴─────────────────────────────────────────────────┘ 
-
+```
 # Adding a New Scanner
 
 Adding a new scanner requires changes in multiple places. All scanner

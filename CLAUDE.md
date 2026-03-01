@@ -72,7 +72,7 @@ Allscan is a declarative security scanning orchestrator written in Go and manage
 
 **Adding a New Scanner:**
 
-See [docs/scanners.md](../docs/scanners.md) for the full step-by-step instructions.
+See [docs/scanners.md](docs/scanners.md) for the full step-by-step instructions.
 
 ## Documentation Maintenance
 
