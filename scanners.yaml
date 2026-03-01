@@ -221,6 +221,10 @@ scanners:
       - "-format"
       - "json"
       - "./..."
+    args_sarif:
+      - "-format"
+      - "sarif"
+      - "./..."
     languages:
       - "go"
     timeout: "5m"
