@@ -31,6 +31,15 @@ Allscan automatically selects scanners based on detected repository languages. S
 
 All commands must be run from the project root directory.
 
+## Prerequisites
+
+**Required:**
+- [Nix](https://nixos.org/download/) with flakes enabled — manages all scanner binaries and the Go build environment.
+
+**Optional:**
+- **GitHub token** (`GITHUB_TOKEN`) — used by the Scorecard scanner (required if Scorecard is enabled) and improves language detection via the GitHub API. Without it, language detection falls back to filesystem inspection and Scorecard is skipped.
+- **DefectDojo instance** — a running [DefectDojo](https://github.com/DefectDojo/django-DefectDojo) server for uploading findings. Configure the endpoint in `scanners.yaml` under `global.upload_endpoint`. Requires `VULN_MGMT_API_TOKEN` to be set.
+
 ## Running Allscan
 
 1. Enter the development shell (provides scanner binaries):
