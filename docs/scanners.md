@@ -1,5 +1,5 @@
-Interface-Based Scanner Architecture                                 
-                                                                       
+# Interface-Based Scanner Architecture
+```
   ┌─────────────────────────────────────────────────────────────────┐  
   │                      ResultParser (interface)                   │  
   │  ├── Parse(data []byte) (FindingSummary, error)                 │   
@@ -38,7 +38,7 @@ Interface-Based Scanner Architecture
   ├────────────────┼─────────────────────────────────────────────────┤ 
   │ GetParser()    │ Factory function to get the right parser        │ 
   └────────────────┴─────────────────────────────────────────────────┘ 
-
+```
 # Adding a New Scanner
 
 Adding a new scanner requires changes in multiple places. All scanner
@@ -112,7 +112,32 @@ var registry = map[string]ResultParser{
 }
 ```
 
-## Step 3: Add Scanner Config
+## Step 3: Write Parser Tests
+
+Write tests BEFORE implementing the parser (TDD). Add a `parsers/trivy_test.go` file:
+
+```go
+func TestTrivyParser_Parse(t *testing.T) {
+    p := &TrivyParser{}
+    tests := []struct { ... }{ ... }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) { ... })
+    }
+}
+```
+
+Cover these cases:
+- Empty input (no findings)
+- Multiple findings with mixed severities
+- Boundary values for severity mappings
+- Invalid JSON (error case)
+
+Run tests to verify:
+```bash
+cd src && go test -v ./parsers/...
+```
+
+## Step 4: Add Scanner Config
 
 Add entry to `scanners.yaml`:
 ```yaml
@@ -130,7 +155,23 @@ Add entry to `scanners.yaml`:
   required_env: []  # Add env vars if API tokens needed
 ```
 
-## Step 4: Update Documentation
+If the scanner supports SARIF output, add `args_sarif` with the SARIF format flags. If `args_local` is also defined, add `args_sarif_local` as well.
+
+### Scanner Args Reference
+
+- `{{output}}` - replaced with the output file path
+- `{{sbom}}` - replaced with the generated SBOM path (used by grype: `sbom:{{sbom}}`)
+- `{{repo}}` - replaced with the repository URL
+- `args_local` - overrides `args` in `--local` mode
+- `args_sarif` - overrides `args` in `--sarif` mode
+- `args_sarif_local` - overrides `args_sarif` in `--sarif --local` mode
+- Priority chain: `args_sarif_local` > `args_sarif` > `args_local` > `args`
+
+### Built-in Scanners
+
+The `binary-detector` scanner uses `builtin:binary-detector` as its command — it has no external binary and is handled directly by the orchestrator.
+
+## Step 5: Update Documentation
 
 1. Add scanner to `README.md` compatibility matrix
 2. Update this file if adding new parser patterns

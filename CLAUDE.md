@@ -72,67 +72,7 @@ Allscan is a declarative security scanning orchestrator written in Go and manage
 
 **Adding a New Scanner:**
 
-When adding a new scanner, you MUST complete ALL of the following steps:
-
-1. **Add to Nix flake** (`flake.nix`):
-   - If the scanner is in nixpkgs: add to the `scanners` list
-   - If not in nixpkgs: create a `buildNpmPackage`, `buildGoModule`, or appropriate derivation
-   - Scanner binaries MUST be installed declaratively via Nix, never manually
-
-2. **Create parser** (`src/parsers/`):
-   - Create parser struct implementing `ResultParser` interface
-   - Implement `Parse()`, `Type()`, `Icon()`, `Name()` methods
-   - Register in `registry` map in `src/parsers/parser.go`
-
-3. **Write parser tests** (`src/parsers/<type>_test.go`):
-   - Write tests BEFORE implementing the parser (TDD)
-   - Cover: empty input (no findings), multiple findings with mixed severities, boundary values for severity mappings, invalid JSON (error case)
-   - Use table-driven tests with `t.Run()` subtests
-   - Run `go test -v ./parsers/...` to verify
-
-4. **Add scanner config** (`scanners.yaml`):
-   - Add scanner entry with name, command, args, timeout
-   - Set `dojo_scan_type` for DefectDojo integration
-   - Add `languages` array (empty `[]` for universal scanners)
-   - Add `required_env` if API tokens are needed
-   - If the scanner supports SARIF output, add `args_sarif` (and `args_sarif_local` if `args_local` is defined) with the SARIF format flags
-
-5. **Update documentation**:
-   - Add scanner to README.md compatibility matrix
-   - Update docs/scanners.md if adding new parser patterns
-
-Example for adding a scanner from nixpkgs:
-```nix
-# In flake.nix, add to scanners list:
-scanners = with pkgs; [
-  gosec
-  new-scanner  # Add here
-];
-```
-
-Example for adding an npm-based scanner not in nixpkgs:
-```nix
-# In flake.nix, create derivation:
-new-scanner = pkgs.buildNpmPackage {
-  pname = "new-scanner";
-  version = "x.y.z";
-  src = pkgs.fetchFromGitHub { ... };
-  npmDepsHash = "sha256-...";
-};
-# Then add to scanners list (may need to comment out until hashes are computed)
-```
-
-**Built-in Scanners:**
-- `binary-detector` uses `builtin:binary-detector` command (no external binary)
-
-**Scanner Args:**
-- `{{output}}` template is replaced with output file path
-- `{{sbom}}` template is replaced with the generated SBOM path (used by grype: `sbom:{{sbom}}`)
-- `{{repo}}` template is replaced with the repository URL
-- `args_local` overrides `args` in `--local` mode (e.g., gitleaks respects .gitignore locally)
-- `args_sarif` overrides `args` in `--sarif` mode (switches output format to SARIF)
-- `args_sarif_local` overrides `args_sarif` in `--sarif --local` mode
-- Priority chain: `args_sarif_local` > `args_sarif` > `args_local` > `args`
+See [docs/scanners.md](docs/scanners.md) for the full step-by-step instructions.
 
 ## Documentation Maintenance
 
