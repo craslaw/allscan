@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -308,8 +309,18 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	cmd := exec.CommandContext(ctx, scanner.Command, args...)
 	cmd.Dir = repoPath
 
-	// Capture output
-	output, err := cmd.CombinedOutput()
+	// Capture output — for stdout-only scanners, keep stdout separate from stderr
+	// so that progress messages on stderr don't corrupt the JSON output.
+	var output []byte
+	if stdoutOnly {
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		err = cmd.Run()
+		output = stdout.Bytes()
+	} else {
+		output, err = cmd.CombinedOutput()
+	}
 
 	duration := time.Since(start)
 
@@ -364,6 +375,7 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 			CommitHash:   commitHash,
 			BranchTag:    branchTag,
 			IsSarif:      isSarif,
+			NDJSON:       scanner.NDJSON,
 		}
 	}
 
@@ -385,5 +397,6 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 		CommitHash:   commitHash,
 		BranchTag:    branchTag,
 		IsSarif:      isSarif,
+		NDJSON:       scanner.NDJSON,
 	}
 }

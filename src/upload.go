@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -60,6 +61,16 @@ func uploadSingleResult(config *Config, result ScanResult, authToken string) err
 	}
 	defer file.Close()
 
+	// For NDJSON output, convert to a JSON array that DefectDojo can parse
+	var uploadReader io.Reader = file
+	if result.NDJSON {
+		converted, convertErr := ndjsonToJSONArray(file)
+		if convertErr != nil {
+			return fmt.Errorf("converting NDJSON to JSON array: %w", convertErr)
+		}
+		uploadReader = bytes.NewReader(converted)
+	}
+
 	productName := extractProductName(result.Repository)
 	if config.Global.ProductOverride != "" {
 		productName = config.Global.ProductOverride
@@ -86,11 +97,107 @@ func uploadSingleResult(config *Config, result ScanResult, authToken string) err
 
 	// Build upload request using the Fluent Builder pattern
 	builder := BuildUploadRequest().
-		WithFile(file, filepath.Base(result.OutputPath)).
+		WithFile(uploadReader, filepath.Base(result.OutputPath)).
 		WithAuthToken(authToken).
 		WithEndpoint(config.Global.UploadEndpoint).
 		AddFields(fields)
 	return builder.Send()
+}
+
+// ndjsonToJSONArray converts concatenated JSON objects into a JSON array.
+// DefectDojo expects govulncheck output as a JSON array of objects,
+// but govulncheck -format json outputs concatenated JSON objects (which may
+// be pretty-printed across multiple lines).
+//
+// It also works around a DefectDojo parser bug: the parser hardcodes
+// affected[0].ecosystem_specific.imports, so osv entries where affected[0]
+// lacks imports data cause a crash. We reorder affected entries so the one
+// with imports comes first, and drop osv entries with no imports at all.
+func ndjsonToJSONArray(r io.Reader) ([]byte, error) {
+	var objects []json.RawMessage
+	dec := json.NewDecoder(r)
+	for dec.More() {
+		var obj json.RawMessage
+		if err := dec.Decode(&obj); err != nil {
+			return nil, err
+		}
+		fixed, ok := fixOSVForDojo(obj)
+		if ok {
+			objects = append(objects, fixed)
+		}
+	}
+	return json.Marshal(objects)
+}
+
+// fixOSVForDojo adjusts osv entries so DefectDojo's parser can handle them.
+// Returns the (possibly modified) object and true if it should be kept,
+// or nil and false if it should be dropped.
+func fixOSVForDojo(raw json.RawMessage) (json.RawMessage, bool) {
+	// Only process osv entries
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return raw, true
+	}
+	osvRaw, isOSV := envelope["osv"]
+	if !isOSV {
+		return raw, true
+	}
+
+	// Parse the osv object to inspect affected entries
+	var osv struct {
+		Affected []struct {
+			EcosystemSpecific *struct {
+				Imports []json.RawMessage `json:"imports"`
+			} `json:"ecosystem_specific"`
+		} `json:"affected"`
+	}
+	if err := json.Unmarshal(osvRaw, &osv); err != nil {
+		return raw, true
+	}
+
+	// Find which affected entry has imports
+	hasImportsIdx := -1
+	for i, aff := range osv.Affected {
+		if aff.EcosystemSpecific != nil && len(aff.EcosystemSpecific.Imports) > 0 {
+			hasImportsIdx = i
+			break
+		}
+	}
+
+	// If no affected entry has imports, drop this osv (DefectDojo will crash)
+	if hasImportsIdx == -1 {
+		return nil, false
+	}
+
+	// If affected[0] already has imports, no fix needed
+	if hasImportsIdx == 0 {
+		return raw, true
+	}
+
+	// Reorder: move the affected entry with imports to index 0.
+	// Re-parse the full osv as generic map to preserve all fields.
+	var osvMap map[string]interface{}
+	if err := json.Unmarshal(osvRaw, &osvMap); err != nil {
+		return raw, true
+	}
+	affected, ok := osvMap["affected"].([]interface{})
+	if !ok || hasImportsIdx >= len(affected) {
+		return raw, true
+	}
+	// Swap to front
+	affected[0], affected[hasImportsIdx] = affected[hasImportsIdx], affected[0]
+	osvMap["affected"] = affected
+
+	newOSV, err := json.Marshal(osvMap)
+	if err != nil {
+		return raw, true
+	}
+	envelope["osv"] = newOSV
+	result, err := json.Marshal(envelope)
+	if err != nil {
+		return raw, true
+	}
+	return result, true
 }
 
 // extractProductName extracts a clean product name from repository URL

@@ -224,6 +224,7 @@ scanners:
     languages:
       - "go"
     timeout: "5m"
+    ndjson: true  # govulncheck outputs NDJSON; convert to JSON array for DefectDojo
 
   - name: "golangci-lint"
     enabled: false  # Disabled by default

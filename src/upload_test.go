@@ -99,3 +99,61 @@ func TestUploadRequestBuilder_Build(t *testing.T) {
 		}
 	})
 }
+
+func TestNdjsonToJSONArray(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{
+			name:  "converts NDJSON lines to JSON array",
+			input: `{"config":{"version":"1.0"}}` + "\n" + `{"finding":{"osv":"GO-2024-0001"}}` + "\n",
+			want:  `[{"config":{"version":"1.0"}},{"finding":{"osv":"GO-2024-0001"}}]`,
+		},
+		{
+			name:  "handles pretty-printed multi-line objects",
+			input: "{\n  \"config\": {\n    \"version\": \"1.0\"\n  }\n}\n{\n  \"finding\": {\n    \"osv\": \"GO-2024-0001\"\n  }\n}\n",
+			want:  `[{"config":{"version":"1.0"}},{"finding":{"osv":"GO-2024-0001"}}]`,
+		},
+		{
+			name:  "empty input produces null",
+			input: "",
+			want:  "null",
+		},
+		{
+			name:  "single object",
+			input: `{"config":{"version":"1.0"}}` + "\n",
+			want:  `[{"config":{"version":"1.0"}}]`,
+		},
+		{
+			name:  "drops osv entries without ecosystem_specific imports",
+			input: `{"config":{"version":"1.0"}}` + "\n" + `{"osv":{"id":"GO-2024-0001","affected":[{"package":{"name":"example.com/pkg"},"ecosystem_specific":{}}]}}` + "\n",
+			want:  `[{"config":{"version":"1.0"}}]`,
+		},
+		{
+			name: "reorders affected so imports entry comes first",
+			input: `{"osv":{"id":"GO-2024-0001","affected":[` +
+				`{"package":{"name":"pkg-no-imports"},"ecosystem_specific":{}},` +
+				`{"package":{"name":"pkg-with-imports"},"ecosystem_specific":{"imports":[{"path":"example.com/pkg","symbols":["Foo"]}]}}` +
+				`]}}` + "\n",
+			want: `[{"osv":{"affected":[` +
+				`{"ecosystem_specific":{"imports":[{"path":"example.com/pkg","symbols":["Foo"]}]},"package":{"name":"pkg-with-imports"}},` +
+				`{"ecosystem_specific":{},"package":{"name":"pkg-no-imports"}}` +
+				`],"id":"GO-2024-0001"}}]`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ndjsonToJSONArray(strings.NewReader(tt.input))
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ndjsonToJSONArray() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if string(got) != tt.want {
+				t.Errorf("ndjsonToJSONArray() =\n  %s\nwant:\n  %s", got, tt.want)
+			}
+		})
+	}
+}
