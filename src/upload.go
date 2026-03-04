@@ -12,10 +12,13 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"allscan/parsers"
 )
 
-// uploadResults uploads all successful scan results to DefectDojo
-func uploadResults(config *Config, results []ScanResult) {
+// uploadResults uploads all successful scan results to DefectDojo.
+// If idx is non-nil, SCA scanner uploads are tagged with reachability information.
+func uploadResults(config *Config, results []ScanResult, idx parsers.ReachabilityIndex) {
 	log.Printf("\n📤 Uploading results to %s", config.Global.UploadEndpoint)
 
 	// Get authorization token from environment
@@ -40,7 +43,13 @@ func uploadResults(config *Config, results []ScanResult) {
 			continue
 		}
 
-		if err := uploadSingleResult(config, result, authToken); err != nil {
+		// Compute reachability tags for SCA scanners
+		var tags []string
+		if idx != nil && (result.Scanner == "grype" || result.Scanner == "osv-scanner") {
+			tags = computeReachabilityTags(result, idx)
+		}
+
+		if err := uploadSingleResult(config, result, authToken, tags); err != nil {
 			log.Printf("  ❌ Failed to upload %s: %v", result.OutputPath, err)
 			failCount++
 		} else {
@@ -52,8 +61,40 @@ func uploadResults(config *Config, results []ScanResult) {
 	log.Printf("\n📊 Upload Summary: %d successful, %d failed", successCount, failCount)
 }
 
-// uploadSingleResult uploads a single scan result to DefectDojo
-func uploadSingleResult(config *Config, result ScanResult, authToken string) error {
+// computeReachabilityTags reads an SCA scanner's output and returns DefectDojo tags
+// based on reachability cross-referencing.
+func computeReachabilityTags(result ScanResult, idx parsers.ReachabilityIndex) []string {
+	data, err := os.ReadFile(result.OutputPath)
+	if err != nil {
+		return nil
+	}
+
+	var findings []parsers.SCAFinding
+	switch result.Scanner {
+	case "grype":
+		findings, err = parsers.ExtractGrypeFindings(data)
+	case "osv-scanner":
+		findings, err = parsers.ExtractOSVScannerFindings(data)
+	}
+	if err != nil || len(findings) == 0 {
+		return nil
+	}
+
+	enriched := parsers.CrossReferenceReachability(findings, idx)
+
+	var tags []string
+	if enriched.Breakdown.Reachable > 0 {
+		tags = append(tags, "reachable")
+	}
+	if enriched.Breakdown.Unreachable > 0 {
+		tags = append(tags, "unreachable")
+	}
+	return tags
+}
+
+// uploadSingleResult uploads a single scan result to DefectDojo.
+// Optional tags are added to the upload form fields.
+func uploadSingleResult(config *Config, result ScanResult, authToken string, tags []string) error {
 	// Open the scan result file
 	file, err := os.Open(result.OutputPath)
 	if err != nil {
@@ -93,6 +134,11 @@ func uploadSingleResult(config *Config, result ScanResult, authToken string) err
 	if result.BranchTag != "" {
 		fields["branch_tag"] = result.BranchTag
 		fields["version"] = result.BranchTag
+	}
+
+	// Add reachability tags if provided
+	if len(tags) > 0 {
+		fields["tags"] = strings.Join(tags, ",")
 	}
 
 	// Build upload request using the Fluent Builder pattern

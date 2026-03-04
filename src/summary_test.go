@@ -19,6 +19,59 @@ func (p *testParser) Type() string { return p.scanType }
 func (p *testParser) Icon() string { return "🔧" }
 func (p *testParser) Name() string { return p.name }
 
+func TestFindGovulncheckOutput(t *testing.T) {
+	tests := []struct {
+		name    string
+		results []ScanResult
+		want    string
+	}{
+		{
+			name:    "no results",
+			results: []ScanResult{},
+			want:    "",
+		},
+		{
+			name: "govulncheck present and successful",
+			results: []ScanResult{
+				{Scanner: "grype", Success: true, OutputPath: "/tmp/grype.json"},
+				{Scanner: "govulncheck", Success: true, OutputPath: "/tmp/govulncheck.json"},
+			},
+			want: "/tmp/govulncheck.json",
+		},
+		{
+			name: "govulncheck failed",
+			results: []ScanResult{
+				{Scanner: "govulncheck", Success: false, OutputPath: "/tmp/govulncheck.json"},
+			},
+			want: "",
+		},
+		{
+			name: "govulncheck SARIF mode excluded",
+			results: []ScanResult{
+				{Scanner: "govulncheck", Success: true, IsSarif: true, OutputPath: "/tmp/govulncheck.sarif"},
+			},
+			want: "",
+		},
+		{
+			name: "no govulncheck in results",
+			results: []ScanResult{
+				{Scanner: "grype", Success: true, OutputPath: "/tmp/grype.json"},
+				{Scanner: "osv-scanner", Success: true, OutputPath: "/tmp/osv.json"},
+			},
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := findGovulncheckOutput(tt.results)
+			if got != tt.want {
+				t.Errorf("findGovulncheckOutput() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestComputeCoverage(t *testing.T) {
 	// Register test parsers and clean up after
 	testParsers := map[string]*testParser{

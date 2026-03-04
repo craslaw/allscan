@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"allscan/parsers"
 )
 
 const resultsMaxAge = 7 * 24 * time.Hour // 7 days
@@ -525,10 +527,24 @@ func main() {
 	// Upload results (if configured)
 	if config.Global.UploadEndpoint != "" {
 		var results []ScanResult
+		// Build a combined reachability index from all govulncheck outputs
+		var reachIdx parsers.ReachabilityIndex
 		for _, ctx := range contexts {
 			results = append(results, ctx.Results...)
+			if idx := buildReachabilityIndexFromResults(ctx.Results); idx != nil {
+				if reachIdx == nil {
+					reachIdx = idx
+				} else {
+					for k, v := range idx {
+						if existing, ok := reachIdx[k]; ok && existing {
+							continue // don't downgrade reachable
+						}
+						reachIdx[k] = v
+					}
+				}
+			}
 		}
-		uploadResults(config, results)
+		uploadResults(config, results, reachIdx)
 	}
 }
 

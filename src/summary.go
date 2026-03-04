@@ -58,6 +58,9 @@ func printSummary(contexts []RepoScanContext) {
 		fmt.Printf("%s%s 📦 %s%s\n", ColorBold, ColorMagenta, repoName, ColorReset)
 		fmt.Printf("%s%s%s\n", ColorDim, thinSeparator, ColorReset)
 
+		// Build reachability index once per repo (from govulncheck output)
+		reachIdx := buildReachabilityIndexFromResults(ctx.Results)
+
 		for _, result := range ctx.Results {
 			totalResults++
 			totalDuration += result.Duration
@@ -96,6 +99,13 @@ func printSummary(contexts []RepoScanContext) {
 					}
 				} else if parser.Type() == "Reachability" {
 					printReachabilitySummary(parser, summary)
+				} else if parser.Type() == "SCA" {
+					// Try enriched display with reachability data
+					if enriched := enrichSCAResult(result, reachIdx); enriched != nil {
+						printEnrichedScannerSummary(parser, enriched)
+					} else {
+						printScannerSummary(parser, summary)
+					}
 				} else {
 					printScannerSummary(parser, summary)
 				}
@@ -458,6 +468,123 @@ func printScannerSummary(parser parsers.ResultParser, summary parsers.FindingSum
 	// Print findings
 	fmt.Printf("     %s\n", strings.Join(findings, "  "))
 	fmt.Printf("     %sTotal: %d findings%s\n", ColorDim, summary.Total, ColorReset)
+}
+
+// findGovulncheckOutput returns the output path of a successful, non-SARIF
+// govulncheck result from the given scan results. Returns "" if not found.
+func findGovulncheckOutput(results []ScanResult) string {
+	for _, r := range results {
+		if r.Scanner == "govulncheck" && r.Success && !r.IsSarif {
+			return r.OutputPath
+		}
+	}
+	return ""
+}
+
+// buildReachabilityIndexFromResults builds a ReachabilityIndex from govulncheck
+// output found in the scan results. Returns nil if no govulncheck output is available.
+func buildReachabilityIndexFromResults(results []ScanResult) parsers.ReachabilityIndex {
+	path := findGovulncheckOutput(results)
+	if path == "" {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	return parsers.BuildReachabilityIndex(data)
+}
+
+// enrichSCAResult reads an SCA result's output, extracts findings, and cross-references
+// with the reachability index. Returns nil if no enrichment is possible.
+func enrichSCAResult(result ScanResult, idx parsers.ReachabilityIndex) *parsers.EnrichedSummary {
+	if idx == nil || result.IsSarif || !result.Success {
+		return nil
+	}
+
+	data, err := os.ReadFile(result.OutputPath)
+	if err != nil {
+		return nil
+	}
+
+	var findings []parsers.SCAFinding
+	switch result.Scanner {
+	case "grype":
+		findings, err = parsers.ExtractGrypeFindings(data)
+	case "osv-scanner":
+		findings, err = parsers.ExtractOSVScannerFindings(data)
+	default:
+		return nil
+	}
+	if err != nil || len(findings) == 0 {
+		return nil
+	}
+
+	enriched := parsers.CrossReferenceReachability(findings, idx)
+	// Only return enrichment if at least one finding has a known reachability status
+	if enriched.Breakdown.Reachable == 0 && enriched.Breakdown.Unreachable == 0 {
+		return nil
+	}
+	return &enriched
+}
+
+// printEnrichedScannerSummary displays findings for an SCA scanner with reachability annotations.
+func printEnrichedScannerSummary(parser parsers.ResultParser, enriched *parsers.EnrichedSummary) {
+	icon := parser.Icon()
+	scanType := parser.Type()
+	scannerName := parser.Name()
+
+	fmt.Printf("  %s %s%s%s (%s%s%s)\n", icon, ColorBold, scannerName, ColorReset, ColorDim, scanType, ColorReset)
+
+	if enriched.Total == 0 {
+		fmt.Printf("     %s✨ No findings%s\n", ColorGreen, ColorReset)
+		return
+	}
+
+	// Build findings line with per-severity reachable annotations
+	var findings []string
+
+	if enriched.Critical > 0 {
+		s := fmt.Sprintf("%s%s🔴 Critical: %d%s", ColorRed, ColorBold, enriched.Critical, ColorReset)
+		if enriched.CriticalReachable > 0 {
+			s += fmt.Sprintf(" %s(%d reachable)%s", ColorDim, enriched.CriticalReachable, ColorReset)
+		}
+		findings = append(findings, s)
+	}
+	if enriched.High > 0 {
+		s := fmt.Sprintf("%s🟠 High: %d%s", ColorRed, enriched.High, ColorReset)
+		if enriched.HighReachable > 0 {
+			s += fmt.Sprintf(" %s(%d reachable)%s", ColorDim, enriched.HighReachable, ColorReset)
+		}
+		findings = append(findings, s)
+	}
+	if enriched.Medium > 0 {
+		s := fmt.Sprintf("%s🟡 Medium: %d%s", ColorYellow, enriched.Medium, ColorReset)
+		if enriched.MediumReachable > 0 {
+			s += fmt.Sprintf(" %s(%d reachable)%s", ColorDim, enriched.MediumReachable, ColorReset)
+		}
+		findings = append(findings, s)
+	}
+	if enriched.Low > 0 {
+		s := fmt.Sprintf("%s🟢 Low: %d%s", ColorGreen, enriched.Low, ColorReset)
+		if enriched.LowReachable > 0 {
+			s += fmt.Sprintf(" %s(%d reachable)%s", ColorDim, enriched.LowReachable, ColorReset)
+		}
+		findings = append(findings, s)
+	}
+	if enriched.Info > 0 {
+		s := fmt.Sprintf("%s⚪ Info: %d%s", ColorDim, enriched.Info, ColorReset)
+		if enriched.InfoReachable > 0 {
+			s += fmt.Sprintf(" (%d reachable)", enriched.InfoReachable)
+		}
+		findings = append(findings, s)
+	}
+
+	fmt.Printf("     %s\n", strings.Join(findings, "  "))
+	fmt.Printf("     %sTotal: %d findings%s\n", ColorDim, enriched.Total, ColorReset)
+	fmt.Printf("     🔬 %sReachability: %s%d reachable%s, %d unreachable, %d unknown%s\n",
+		ColorDim, ColorReset, enriched.Breakdown.Reachable, ColorDim,
+		enriched.Breakdown.Unreachable, enriched.Breakdown.Unknown, ColorReset)
 }
 
 // printReachabilitySummary displays reachability analysis results
