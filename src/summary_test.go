@@ -19,14 +19,68 @@ func (p *testParser) Type() string { return p.scanType }
 func (p *testParser) Icon() string { return "🔧" }
 func (p *testParser) Name() string { return p.name }
 
+func TestFindGovulncheckOutput(t *testing.T) {
+	tests := []struct {
+		name    string
+		results []ScanResult
+		want    string
+	}{
+		{
+			name:    "no results",
+			results: []ScanResult{},
+			want:    "",
+		},
+		{
+			name: "govulncheck present and successful",
+			results: []ScanResult{
+				{Scanner: "grype", Success: true, OutputPath: "/tmp/grype.json"},
+				{Scanner: "govulncheck", Success: true, OutputPath: "/tmp/govulncheck.json"},
+			},
+			want: "/tmp/govulncheck.json",
+		},
+		{
+			name: "govulncheck failed",
+			results: []ScanResult{
+				{Scanner: "govulncheck", Success: false, OutputPath: "/tmp/govulncheck.json"},
+			},
+			want: "",
+		},
+		{
+			name: "govulncheck SARIF mode excluded",
+			results: []ScanResult{
+				{Scanner: "govulncheck", Success: true, IsSarif: true, OutputPath: "/tmp/govulncheck.sarif"},
+			},
+			want: "",
+		},
+		{
+			name: "no govulncheck in results",
+			results: []ScanResult{
+				{Scanner: "grype", Success: true, OutputPath: "/tmp/grype.json"},
+				{Scanner: "osv-scanner", Success: true, OutputPath: "/tmp/osv.json"},
+			},
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := findGovulncheckOutput(tt.results)
+			if got != tt.want {
+				t.Errorf("findGovulncheckOutput() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestComputeCoverage(t *testing.T) {
 	// Register test parsers and clean up after
 	testParsers := map[string]*testParser{
-		"test-sca-universal":  {name: "test-sca-universal", scanType: "SCA"},
-		"test-sast-go":        {name: "test-sast-go", scanType: "SAST"},
-		"test-secrets":        {name: "test-secrets", scanType: "Secrets"},
-		"test-scorecard":      {name: "test-scorecard", scanType: "Scorecard"},
-		"test-sast-universal": {name: "test-sast-universal", scanType: "SAST"},
+		"test-sca-universal":   {name: "test-sca-universal", scanType: "SCA"},
+		"test-sast-go":         {name: "test-sast-go", scanType: "SAST"},
+		"test-secrets":         {name: "test-secrets", scanType: "Secrets"},
+		"test-scorecard":       {name: "test-scorecard", scanType: "Scorecard"},
+		"test-sast-universal":  {name: "test-sast-universal", scanType: "SAST"},
+		"test-reach-go":        {name: "test-reach-go", scanType: "Reachability"},
 	}
 	for name, p := range testParsers {
 		parsers.Register(name, p)
@@ -66,8 +120,8 @@ func TestComputeCoverage(t *testing.T) {
 				},
 			},
 			expected: map[string]map[string]CoverageState{
-				"go":     {"SCA": CoverageOK, "SAST": CoverageNone},
-				"python": {"SCA": CoverageOK, "SAST": CoverageNone},
+				"go":     {"SCA": CoverageOK, "SAST": CoverageNone, "Reachability": CoverageNone},
+				"python": {"SCA": CoverageOK, "SAST": CoverageNone, "Reachability": CoverageNone},
 			},
 		},
 		{
@@ -82,8 +136,8 @@ func TestComputeCoverage(t *testing.T) {
 				},
 			},
 			expected: map[string]map[string]CoverageState{
-				"go":     {"SCA": CoverageNone, "SAST": CoverageOK},
-				"python": {"SCA": CoverageNone, "SAST": CoverageNone},
+				"go":     {"SCA": CoverageNone, "SAST": CoverageOK, "Reachability": CoverageNone},
+				"python": {"SCA": CoverageNone, "SAST": CoverageNone, "Reachability": CoverageNone},
 			},
 		},
 		{
@@ -98,7 +152,7 @@ func TestComputeCoverage(t *testing.T) {
 				},
 			},
 			expected: map[string]map[string]CoverageState{
-				"go": {"SCA": CoverageNone, "SAST": CoverageFailed},
+				"go": {"SCA": CoverageNone, "SAST": CoverageFailed, "Reachability": CoverageNone},
 			},
 		},
 		{
@@ -113,7 +167,7 @@ func TestComputeCoverage(t *testing.T) {
 				},
 			},
 			expected: map[string]map[string]CoverageState{
-				"go": {"SCA": CoverageNone, "SAST": CoverageNone},
+				"go": {"SCA": CoverageNone, "SAST": CoverageNone, "Reachability": CoverageNone},
 			},
 		},
 		{
@@ -134,9 +188,9 @@ func TestComputeCoverage(t *testing.T) {
 				},
 			},
 			expected: map[string]map[string]CoverageState{
-				"go":     {"SCA": CoverageOK, "SAST": CoverageOK},
-				"python": {"SCA": CoverageOK, "SAST": CoverageNone},
-				"shell":  {"SCA": CoverageOK, "SAST": CoverageNone},
+				"go":     {"SCA": CoverageOK, "SAST": CoverageOK, "Reachability": CoverageNone},
+				"python": {"SCA": CoverageOK, "SAST": CoverageNone, "Reachability": CoverageNone},
+				"shell":  {"SCA": CoverageOK, "SAST": CoverageNone, "Reachability": CoverageNone},
 			},
 		},
 		{
@@ -155,8 +209,8 @@ func TestComputeCoverage(t *testing.T) {
 				},
 			},
 			expected: map[string]map[string]CoverageState{
-				"go":     {"SCA": CoverageOK, "SAST": CoverageNone},
-				"elixir": {"SCA": CoverageConditional, "SAST": CoverageNone},
+				"go":     {"SCA": CoverageOK, "SAST": CoverageNone, "Reachability": CoverageNone},
+				"elixir": {"SCA": CoverageConditional, "SAST": CoverageNone, "Reachability": CoverageNone},
 			},
 		},
 		{
@@ -180,7 +234,7 @@ func TestComputeCoverage(t *testing.T) {
 				},
 			},
 			expected: map[string]map[string]CoverageState{
-				"elixir": {"SCA": CoverageOK, "SAST": CoverageConditional},
+				"elixir": {"SCA": CoverageOK, "SAST": CoverageConditional, "Reachability": CoverageNone},
 			},
 		},
 		{
@@ -197,7 +251,24 @@ func TestComputeCoverage(t *testing.T) {
 				},
 			},
 			expected: map[string]map[string]CoverageState{
-				"go": {"SCA": CoverageNone, "SAST": CoverageOK},
+				"go": {"SCA": CoverageNone, "SAST": CoverageOK, "Reachability": CoverageNone},
+			},
+		},
+		{
+			name: "reachability scanner shows in coverage matrix",
+			ctx: RepoScanContext{
+				Languages: &DetectedLanguages{Languages: []string{"go"}},
+				Scanners: []ScannerConfig{
+					{Name: "test-sca-universal", Languages: []string{}},
+					{Name: "test-reach-go", Languages: []string{"go"}},
+				},
+				Results: []ScanResult{
+					{Scanner: "test-sca-universal", Success: true},
+					{Scanner: "test-reach-go", Success: true},
+				},
+			},
+			expected: map[string]map[string]CoverageState{
+				"go": {"SCA": CoverageOK, "SAST": CoverageNone, "Reachability": CoverageOK},
 			},
 		},
 	}

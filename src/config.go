@@ -47,6 +47,7 @@ type ScannerConfig struct {
 	timeout      time.Duration // parsed timeout (unexported)
 	DojoScanType string        `yaml:"dojo_scan_type"`
 	RequiredEnv  []string      `yaml:"required_env"` // Environment variables that must be set
+	NDJSON       bool          `yaml:"ndjson"`        // Output is NDJSON; convert to JSON array for upload
 }
 
 // RepositoryConfig defines a target repository to scan
@@ -72,6 +73,7 @@ type ScanResult struct {
 	CommitHash   string // Actual commit hash scanned (short format)
 	BranchTag    string // Branch or tag name (for DefectDojo)
 	IsSarif      bool   // True when output is SARIF format (skip JSON parsing)
+	NDJSON       bool   // True when output is NDJSON (convert to JSON array for upload)
 }
 
 // RepoScanContext bundles scan results with the language and scanner metadata

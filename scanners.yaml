@@ -213,6 +213,23 @@ scanners:
     languages: []
     timeout: "5m"
 
+  - name: "govulncheck"
+    enabled: true
+    dojo_scan_type: "Govulncheck Scanner"
+    command: "govulncheck"
+    args:
+      - "-format"
+      - "json"
+      - "./..."
+    args_sarif:
+      - "-format"
+      - "sarif"
+      - "./..."
+    languages:
+      - "go"
+    timeout: "5m"
+    ndjson: true  # govulncheck outputs NDJSON; convert to JSON array for DefectDojo
+
   - name: "golangci-lint"
     enabled: false  # Disabled by default
     dojo_scan_type: "Golangci-lint"

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -283,6 +284,15 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 		}
 	}
 
+	// Check if this scanner writes to {{output}} itself or is stdout-only
+	stdoutOnly := true
+	for _, arg := range selectedArgs {
+		if strings.Contains(arg, "{{output}}") {
+			stdoutOnly = false
+			break
+		}
+	}
+
 	// Prepare arguments with template substitution
 	args := make([]string, len(selectedArgs))
 	for i, arg := range selectedArgs {
@@ -299,8 +309,18 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	cmd := exec.CommandContext(ctx, scanner.Command, args...)
 	cmd.Dir = repoPath
 
-	// Capture output
-	output, err := cmd.CombinedOutput()
+	// Capture output — for stdout-only scanners, keep stdout separate from stderr
+	// so that progress messages on stderr don't corrupt the JSON output.
+	var output []byte
+	if stdoutOnly {
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		err = cmd.Run()
+		output = stdout.Bytes()
+	} else {
+		output, err = cmd.CombinedOutput()
+	}
 
 	duration := time.Since(start)
 
@@ -321,6 +341,24 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 			}
 		}
 
+		// Stdout-only scanners that exit non-zero may still have valid output
+		if stdoutOnly && len(output) > 0 {
+			if writeErr := os.WriteFile(outputPath, output, 0644); writeErr == nil {
+				log.Printf("    ✅ %s completed in %v (with findings)", scanner.Name, duration)
+				return ScanResult{
+					Scanner:      scanner.Name,
+					Repository:   repo.URL,
+					OutputPath:   outputPath,
+					Success:      true,
+					Duration:     duration,
+					DojoScanType: scanner.DojoScanType,
+					CommitHash:   commitHash,
+					BranchTag:    branchTag,
+					IsSarif:      isSarif,
+				}
+			}
+		}
+
 		log.Printf("    ❌ %s failed: %v", scanner.Name, err)
 		if len(output) > 0 {
 			log.Printf("    Output: %s", string(output))
@@ -337,6 +375,14 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 			CommitHash:   commitHash,
 			BranchTag:    branchTag,
 			IsSarif:      isSarif,
+			NDJSON:       scanner.NDJSON,
+		}
+	}
+
+	// Stdout-only scanners: write captured stdout to the output file
+	if stdoutOnly && len(output) > 0 {
+		if writeErr := os.WriteFile(outputPath, output, 0644); writeErr != nil {
+			log.Printf("    ⚠️  %s completed but failed to write output: %v", scanner.Name, writeErr)
 		}
 	}
 
@@ -351,5 +397,6 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 		CommitHash:   commitHash,
 		BranchTag:    branchTag,
 		IsSarif:      isSarif,
+		NDJSON:       scanner.NDJSON,
 	}
 }

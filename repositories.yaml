@@ -18,6 +18,8 @@ repositories:
     version: "v2.10.1"
   - url: "https://github.com/securego/gosec"
     version: "v2.23.0"
+  - url: "https://github.com/golang/vuln"
+    version: "v1.1.4"
   - url: "https://github.com/anchore/grype"
     version: "v0.108.0"
   - url: "https://github.com/google/osv-scanner"

@@ -15,6 +15,7 @@ func TestGet(t *testing.T) {
 		{name: "gitleaks", wantName: "gitleaks", wantType: "Secrets", wantIconNE: true},
 		{name: "binary-detector", wantName: "binary-detector", wantType: "Binary", wantIconNE: true},
 		{name: "scorecard", wantName: "scorecard", wantType: "Scorecard", wantIconNE: true},
+		{name: "govulncheck", wantName: "govulncheck", wantType: "Reachability", wantIconNE: true},
 	}
 
 	for _, tt := range registered {
