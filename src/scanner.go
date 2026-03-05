@@ -168,6 +168,16 @@ func isScannerCompatible(scanner ScannerConfig, detected *DetectedLanguages) boo
 	return detected.hasAnyLanguage(scanner.LanguagesConditional)
 }
 
+// buildScanResultFilename constructs a filename for a scanner's output file.
+// Pattern: {repoName}_{version}_{scannerName}_{timestamp}{ext} for version tags
+//          {repoName}_{commitHash}_{scannerName}_{timestamp}{ext} for branch-only targets
+func buildScanResultFilename(repoName, scannerName, branchTag, commitHash, timestamp, ext string) string {
+	if isVersionTag(branchTag) {
+		return fmt.Sprintf("%s_%s_%s_%s%s", repoName, branchTag, scannerName, timestamp, ext)
+	}
+	return fmt.Sprintf("%s_%s_%s_%s%s", repoName, commitHash, scannerName, timestamp, ext)
+}
+
 // runScanner executes a single scanner against a repository
 func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, repoPath, commitHash, branchTag, sbomPath string) ScanResult {
 	start := time.Now()
@@ -195,12 +205,12 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	name := repoName(repo)
 
 	// Create output path with appropriate extension
-	timestamp := time.Now().Format("20060102-150405")
+	timestamp := time.Now().Format("20060102")
 	ext := ".json"
 	if isSarif {
 		ext = ".sarif"
 	}
-	outputFilename := fmt.Sprintf("%s_%s_%s%s", name, scanner.Name, timestamp, ext)
+	outputFilename := buildScanResultFilename(name, scanner.Name, branchTag, commitHash, timestamp, ext)
 
 	// Convert to absolute path
 	resultsDir, err := filepath.Abs(config.Global.ResultsDir)

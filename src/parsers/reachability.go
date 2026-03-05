@@ -1,7 +1,6 @@
 package parsers
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 )
@@ -11,9 +10,15 @@ import (
 // called by the application, distinguishing reachable from unreachable findings.
 type GovulncheckParser struct{}
 
-// govulncheckFinding represents a single finding message from govulncheck NDJSON output.
-// Each line has one top-level key: "config", "progress", "osv", or "finding".
-type govulncheckFinding struct {
+// govulncheckMessage is a combined struct for decoding any govulncheck JSON entry.
+// govulncheck outputs a stream of JSON objects, each with exactly one top-level key:
+// "config", "progress", "osv", "finding", or "SBOM". This struct captures the
+// fields we need from osv and finding entries.
+type govulncheckMessage struct {
+	OSV *struct {
+		ID      string   `json:"id"`
+		Aliases []string `json:"aliases"`
+	} `json:"osv"`
 	Finding *struct {
 		OSV   string `json:"osv"`
 		Trace []struct {
@@ -36,16 +41,11 @@ func (p *GovulncheckParser) Parse(data []byte) (FindingSummary, error) {
 	// Track reachability per OSV ID (true = reachable, false = unreachable only)
 	osvReachable := make(map[string]bool)
 
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(bytes.TrimSpace(line)) == 0 {
-			continue
-		}
-
-		var msg govulncheckFinding
-		if err := json.Unmarshal(line, &msg); err != nil {
-			continue // skip non-JSON lines (progress messages, etc.)
+	dec := json.NewDecoder(bytes.NewReader(data))
+	for dec.More() {
+		var msg govulncheckMessage
+		if err := dec.Decode(&msg); err != nil {
+			break
 		}
 
 		if msg.Finding == nil || msg.Finding.OSV == "" {
@@ -111,16 +111,7 @@ type ReachabilityBreakdown struct {
 	Unknown     int
 }
 
-// govulncheckOSV parses the osv entry from govulncheck NDJSON to extract
-// the vulnerability ID and its aliases (CVE/GHSA mappings).
-type govulncheckOSV struct {
-	OSV *struct {
-		ID      string   `json:"id"`
-		Aliases []string `json:"aliases"`
-	} `json:"osv"`
-}
-
-// BuildReachabilityIndex parses govulncheck NDJSON output and builds an index
+// BuildReachabilityIndex parses govulncheck JSON output and builds an index
 // mapping all vulnerability IDs (GO-xxxx + CVE/GHSA aliases) to reachability status.
 func BuildReachabilityIndex(data []byte) ReachabilityIndex {
 	// First pass: build osv ID → reachability from finding entries
@@ -128,35 +119,28 @@ func BuildReachabilityIndex(data []byte) ReachabilityIndex {
 	// Also collect alias mappings from osv entries
 	aliasMap := make(map[string][]string) // GO-ID → [CVE-xxx, GHSA-xxx, ...]
 
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(bytes.TrimSpace(line)) == 0 {
-			continue
+	dec := json.NewDecoder(bytes.NewReader(data))
+	for dec.More() {
+		var msg govulncheckMessage
+		if err := dec.Decode(&msg); err != nil {
+			break
 		}
 
-		// Try parsing as osv entry (for aliases)
-		var osvMsg govulncheckOSV
-		if err := json.Unmarshal(line, &osvMsg); err == nil && osvMsg.OSV != nil && osvMsg.OSV.ID != "" {
-			aliasMap[osvMsg.OSV.ID] = osvMsg.OSV.Aliases
+		// Collect aliases from osv entries
+		if msg.OSV != nil && msg.OSV.ID != "" {
+			aliasMap[msg.OSV.ID] = msg.OSV.Aliases
 		}
 
-		// Try parsing as finding entry (for reachability)
-		var findingMsg govulncheckFinding
-		if err := json.Unmarshal(line, &findingMsg); err != nil {
-			continue
-		}
-		if findingMsg.Finding == nil || findingMsg.Finding.OSV == "" {
-			continue
-		}
+		// Collect reachability from finding entries
+		if msg.Finding != nil && msg.Finding.OSV != "" {
+			osvID := msg.Finding.OSV
+			reachable := isTraceReachable(msg.Finding.Trace)
 
-		osvID := findingMsg.Finding.OSV
-		reachable := isTraceReachable(findingMsg.Finding.Trace)
-
-		if reachable {
-			osvReachable[osvID] = true
-		} else if _, exists := osvReachable[osvID]; !exists {
-			osvReachable[osvID] = false
+			if reachable {
+				osvReachable[osvID] = true
+			} else if _, exists := osvReachable[osvID]; !exists {
+				osvReachable[osvID] = false
+			}
 		}
 	}
 
@@ -174,6 +158,40 @@ func BuildReachabilityIndex(data []byte) ReachabilityIndex {
 	}
 
 	return idx
+}
+
+// ExpandWithAliasGroups enriches the reachability index using ID alias groups
+// (typically from OSV-scanner). For each group, if any ID in the group has a
+// known reachability status, that status is propagated to all other IDs in the group.
+// Reachable status wins over unreachable when multiple IDs in a group conflict.
+func (idx ReachabilityIndex) ExpandWithAliasGroups(groups [][]string) {
+	if idx == nil {
+		return
+	}
+	for _, group := range groups {
+		// First pass: find if any ID in this group is known
+		groupReachable := false
+		groupKnown := false
+		for _, id := range group {
+			if reachable, known := idx[id]; known {
+				groupKnown = true
+				if reachable {
+					groupReachable = true
+					break
+				}
+			}
+		}
+		if !groupKnown {
+			continue
+		}
+		// Second pass: propagate to all IDs in the group
+		for _, id := range group {
+			if existing, ok := idx[id]; ok && existing {
+				continue // don't downgrade reachable
+			}
+			idx[id] = groupReachable
+		}
+	}
 }
 
 // Lookup returns the reachability status for a vulnerability ID.

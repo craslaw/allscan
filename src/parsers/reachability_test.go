@@ -70,12 +70,43 @@ func TestGovulncheckParser_Parse(t *testing.T) {
 			want: FindingSummary{},
 		},
 		{
-			name: "invalid JSON lines are skipped",
-			input: `not json at all
-{"finding":{"osv":"GO-2024-0001","trace":[{"position":{"filename":"main.go","line":1,"col":1}}]}}
-{bad json}
+			name:  "invalid JSON stops parsing",
+			input: `not json at all`,
+			want:  FindingSummary{},
+		},
+		{
+			name: "pretty-printed JSON objects",
+			input: `{
+  "config": {
+    "protocol_version": "v1.0.0"
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-0001",
+    "trace": [
+      {
+        "position": {
+          "filename": "main.go",
+          "line": 10,
+          "col": 5
+        }
+      }
+    ]
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-0002",
+    "trace": [
+      {
+        "position": null
+      }
+    ]
+  }
+}
 `,
-			want: FindingSummary{Critical: 1, Total: 1},
+			want: FindingSummary{Critical: 1, Info: 1, Total: 2},
 		},
 		{
 			name: "finding with null trace position fields",
@@ -161,10 +192,39 @@ func TestBuildReachabilityIndex(t *testing.T) {
 {"finding":{"osv":"GO-2024-0002","trace":[{"position":null}]}}
 `,
 			wantIndex: map[string]bool{
-				"GO-2024-0001": true,
+				"GO-2024-0001":  true,
 				"CVE-2024-1111": true,
-				"GO-2024-0002": false,
+				"GO-2024-0002":  false,
 				"CVE-2024-2222": false,
+			},
+		},
+		{
+			name: "pretty-printed JSON objects",
+			input: `{
+  "osv": {
+    "id": "GO-2024-0001",
+    "aliases": ["CVE-2024-1234", "GHSA-xxxx-yyyy-zzzz"]
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-0001",
+    "trace": [
+      {
+        "position": {
+          "filename": "main.go",
+          "line": 1,
+          "col": 1
+        }
+      }
+    ]
+  }
+}
+`,
+			wantIndex: map[string]bool{
+				"GO-2024-0001":        true,
+				"CVE-2024-1234":       true,
+				"GHSA-xxxx-yyyy-zzzz": true,
 			},
 		},
 	}
@@ -186,6 +246,106 @@ func TestBuildReachabilityIndex(t *testing.T) {
 
 			for _, id := range tt.wantMissing {
 				_, known := idx.Lookup(id)
+				if known {
+					t.Errorf("Lookup(%q): expected unknown, got known", id)
+				}
+			}
+		})
+	}
+}
+
+func TestReachabilityIndex_ExpandWithAliasGroups(t *testing.T) {
+	tests := []struct {
+		name        string
+		index       ReachabilityIndex
+		groups      [][]string
+		wantIndex   map[string]bool
+		wantMissing []string
+	}{
+		{
+			name:  "expands GO ID to GHSA via OSV-scanner group",
+			index: ReachabilityIndex{"GO-2024-0001": true},
+			groups: [][]string{
+				{"GO-2024-0001", "CVE-2024-1234", "GHSA-xxxx-yyyy-zzzz"},
+			},
+			wantIndex: map[string]bool{
+				"GO-2024-0001":        true,
+				"CVE-2024-1234":       true,
+				"GHSA-xxxx-yyyy-zzzz": true,
+			},
+		},
+		{
+			name:  "unreachable status propagated",
+			index: ReachabilityIndex{"GO-2024-0001": false},
+			groups: [][]string{
+				{"GO-2024-0001", "GHSA-aaaa-bbbb-cccc"},
+			},
+			wantIndex: map[string]bool{
+				"GO-2024-0001":        false,
+				"GHSA-aaaa-bbbb-cccc": false,
+			},
+		},
+		{
+			name:  "reachable wins when group has mixed status",
+			index: ReachabilityIndex{"GO-2024-0001": true, "CVE-2024-1234": false},
+			groups: [][]string{
+				{"GO-2024-0001", "CVE-2024-1234", "GHSA-xxxx-yyyy-zzzz"},
+			},
+			wantIndex: map[string]bool{
+				"GO-2024-0001":        true,
+				"CVE-2024-1234":       true, // upgraded: group contains reachable GO-2024-0001
+				"GHSA-xxxx-yyyy-zzzz": true,
+			},
+		},
+		{
+			name:  "group with no known IDs is skipped",
+			index: ReachabilityIndex{"GO-2024-0001": true},
+			groups: [][]string{
+				{"CVE-2024-9999", "GHSA-zzzz-yyyy-xxxx"},
+			},
+			wantIndex: map[string]bool{
+				"GO-2024-0001": true,
+			},
+			wantMissing: []string{"CVE-2024-9999", "GHSA-zzzz-yyyy-xxxx"},
+		},
+		{
+			name:   "nil index is safe",
+			index:  nil,
+			groups: [][]string{{"GO-2024-0001", "CVE-2024-1234"}},
+		},
+		{
+			name:  "multiple groups expanded independently",
+			index: ReachabilityIndex{"GO-2024-0001": true, "GO-2024-0002": false},
+			groups: [][]string{
+				{"GO-2024-0001", "GHSA-aaaa-bbbb-cccc"},
+				{"GO-2024-0002", "GHSA-dddd-eeee-ffff"},
+			},
+			wantIndex: map[string]bool{
+				"GO-2024-0001":        true,
+				"GHSA-aaaa-bbbb-cccc": true,
+				"GO-2024-0002":        false,
+				"GHSA-dddd-eeee-ffff": false,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.index.ExpandWithAliasGroups(tt.groups)
+
+			for id, wantReachable := range tt.wantIndex {
+				reachable, known := tt.index.Lookup(id)
+				if !known {
+					t.Errorf("Lookup(%q): expected known, got unknown", id)
+					continue
+				}
+				if reachable != wantReachable {
+					t.Errorf("Lookup(%q): reachable = %v, want %v", id, reachable, wantReachable)
+				}
+			}
+
+			for _, id := range tt.wantMissing {
+				_, known := tt.index.Lookup(id)
 				if known {
 					t.Errorf("Lookup(%q): expected unknown, got known", id)
 				}

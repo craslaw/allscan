@@ -127,7 +127,7 @@ func promptYesNo(prompt string) bool {
 	}
 
 	response = strings.TrimSpace(strings.ToLower(response))
-	return response == "y" || response == "yes"
+	return response == "" || response == "y" || response == "yes"
 }
 
 // promptContinue asks the user if they want to continue and returns their choice.

@@ -151,6 +151,18 @@ func TestExtractOSVScannerFindings(t *testing.T) {
 			wantFirst: SCAFinding{IDs: []string{"CVE-2024-1234", "GHSA-xxxx-yyyy-zzzz"}, Severity: "high"},
 		},
 		{
+			name: "falls back to database_specific severity when max_severity is empty",
+			input: `{"results": [{"packages": [{
+				"groups": [{"ids": ["GO-2022-0001"], "aliases": ["GO-2022-0001", "GHSA-xxxx-yyyy-zzzz"], "max_severity": ""}],
+				"vulnerabilities": [
+					{"id": "GO-2022-0001"},
+					{"id": "GHSA-xxxx-yyyy-zzzz", "database_specific": {"severity": "HIGH"}}
+				]
+			}]}]}`,
+			wantCount: 1,
+			wantFirst: SCAFinding{IDs: []string{"GO-2022-0001"}, Severity: "high"},
+		},
+		{
 			name:    "invalid JSON",
 			input:   `{invalid`,
 			wantErr: true,
@@ -277,6 +289,72 @@ func TestCrossReferenceReachability(t *testing.T) {
 	}
 }
 
+func TestExtractOSVScannerAliasGroups(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		wantGroups [][]string
+	}{
+		{
+			name:       "empty results",
+			input:      `{"results": []}`,
+			wantGroups: nil,
+		},
+		{
+			name: "single group with multiple IDs",
+			input: `{"results": [{"packages": [{"groups": [
+				{"ids": ["GO-2024-0001", "CVE-2024-1234", "GHSA-xxxx-yyyy-zzzz"], "max_severity": "HIGH"}
+			]}]}]}`,
+			wantGroups: [][]string{{"GO-2024-0001", "CVE-2024-1234", "GHSA-xxxx-yyyy-zzzz"}},
+		},
+		{
+			name: "single-ID groups are excluded",
+			input: `{"results": [{"packages": [{"groups": [
+				{"ids": ["CVE-2024-1234"], "max_severity": "HIGH"}
+			]}]}]}`,
+			wantGroups: nil,
+		},
+		{
+			name: "multiple groups across packages",
+			input: `{"results": [{"packages": [
+				{"groups": [
+					{"ids": ["GO-2024-0001", "CVE-2024-1111"], "max_severity": "HIGH"},
+					{"ids": ["GO-2024-0002", "CVE-2024-2222", "GHSA-aaaa-bbbb-cccc"], "max_severity": "CRITICAL"}
+				]}
+			]}]}`,
+			wantGroups: [][]string{
+				{"GO-2024-0001", "CVE-2024-1111"},
+				{"GO-2024-0002", "CVE-2024-2222", "GHSA-aaaa-bbbb-cccc"},
+			},
+		},
+		{
+			name:       "invalid JSON returns nil",
+			input:      `{invalid`,
+			wantGroups: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractOSVScannerAliasGroups([]byte(tt.input))
+			if len(got) != len(tt.wantGroups) {
+				t.Fatalf("got %d groups, want %d", len(got), len(tt.wantGroups))
+			}
+			for i, wantGroup := range tt.wantGroups {
+				if len(got[i]) != len(wantGroup) {
+					t.Errorf("group[%d] has %d IDs, want %d", i, len(got[i]), len(wantGroup))
+					continue
+				}
+				for j, id := range wantGroup {
+					if got[i][j] != id {
+						t.Errorf("group[%d][%d] = %q, want %q", i, j, got[i][j], id)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestOSVScannerParser_Parse(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -328,6 +406,35 @@ func TestOSVScannerParser_Parse(t *testing.T) {
 				{"max_severity": "UNKNOWN"}
 			]}]}]}`,
 			want: FindingSummary{Info: 1, Total: 1},
+		},
+		{
+			name: "moderate severity maps to medium",
+			input: `{"results": [{"packages": [{"groups": [
+				{"max_severity": "MODERATE"}
+			]}]}]}`,
+			want: FindingSummary{Medium: 1, Total: 1},
+		},
+		{
+			name: "empty max_severity falls back to vulnerability database_specific severity",
+			input: `{"results": [{"packages": [{
+				"groups": [{"ids": ["GO-2022-0001"], "aliases": ["GO-2022-0001", "GHSA-xxxx-yyyy-zzzz"], "max_severity": ""}],
+				"vulnerabilities": [
+					{"id": "GO-2022-0001"},
+					{"id": "GHSA-xxxx-yyyy-zzzz", "database_specific": {"severity": "HIGH"}}
+				]
+			}]}]}`,
+			want: FindingSummary{High: 1, Total: 1},
+		},
+		{
+			name: "fallback picks max severity across aliases",
+			input: `{"results": [{"packages": [{
+				"groups": [{"ids": ["GO-2022-0001"], "aliases": ["GO-2022-0001", "GHSA-aaaa-bbbb-cccc", "CVE-2022-1234"], "max_severity": ""}],
+				"vulnerabilities": [
+					{"id": "GHSA-aaaa-bbbb-cccc", "database_specific": {"severity": "MODERATE"}},
+					{"id": "CVE-2022-1234", "database_specific": {"severity": "CRITICAL"}}
+				]
+			}]}]}`,
+			want: FindingSummary{Critical: 1, Total: 1},
 		},
 		{
 			name:    "invalid JSON",
