@@ -257,51 +257,56 @@ func TestBuildScanResultFilename(t *testing.T) {
 		repoName    string
 		scannerName string
 		branchTag   string
+		commitHash  string
 		timestamp   string
 		ext         string
 		want        string
 	}{
 		{
-			name:        "version tag includes version",
+			name:        "version tag includes version, no commit hash",
 			repoName:    "grype",
 			scannerName: "gosec",
 			branchTag:   "v0.87.0",
-			timestamp:   "20260304-120000",
+			commitHash:  "abc1234",
+			timestamp:   "20260304",
 			ext:         ".json",
-			want:        "grype_v0.87.0_gosec_20260304-120000.json",
+			want:        "grype_v0.87.0_gosec_20260304.json",
 		},
 		{
 			name:        "version tag with sarif ext",
 			repoName:    "myrepo",
 			scannerName: "semgrep",
 			branchTag:   "1.2.3",
-			timestamp:   "20260304-120000",
+			commitHash:  "abc1234",
+			timestamp:   "20260304",
 			ext:         ".sarif",
-			want:        "myrepo_1.2.3_semgrep_20260304-120000.sarif",
+			want:        "myrepo_1.2.3_semgrep_20260304.sarif",
 		},
 		{
-			name:        "branch name omits version",
+			name:        "branch name includes commit hash",
 			repoName:    "allscan",
 			scannerName: "grype",
 			branchTag:   "main",
-			timestamp:   "20260304-120000",
+			commitHash:  "def5678",
+			timestamp:   "20260304",
 			ext:         ".json",
-			want:        "allscan_grype_20260304-120000.json",
+			want:        "allscan_def5678_grype_20260304.json",
 		},
 		{
-			name:        "empty branchTag omits version",
+			name:        "empty branchTag includes commit hash",
 			repoName:    "myrepo",
 			scannerName: "trivy",
 			branchTag:   "",
-			timestamp:   "20260304-120000",
+			commitHash:  "aaa1111",
+			timestamp:   "20260304",
 			ext:         ".json",
-			want:        "myrepo_trivy_20260304-120000.json",
+			want:        "myrepo_aaa1111_trivy_20260304.json",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildScanResultFilename(tt.repoName, tt.scannerName, tt.branchTag, tt.timestamp, tt.ext)
+			got := buildScanResultFilename(tt.repoName, tt.scannerName, tt.branchTag, tt.commitHash, tt.timestamp, tt.ext)
 			if got != tt.want {
 				t.Errorf("buildScanResultFilename() = %q, want %q", got, tt.want)
 			}
