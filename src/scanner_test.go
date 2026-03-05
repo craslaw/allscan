@@ -251,6 +251,64 @@ func TestSelectArgs(t *testing.T) {
 	}
 }
 
+func TestBuildScanResultFilename(t *testing.T) {
+	tests := []struct {
+		name        string
+		repoName    string
+		scannerName string
+		branchTag   string
+		timestamp   string
+		ext         string
+		want        string
+	}{
+		{
+			name:        "version tag includes version",
+			repoName:    "grype",
+			scannerName: "gosec",
+			branchTag:   "v0.87.0",
+			timestamp:   "20260304-120000",
+			ext:         ".json",
+			want:        "grype_v0.87.0_gosec_20260304-120000.json",
+		},
+		{
+			name:        "version tag with sarif ext",
+			repoName:    "myrepo",
+			scannerName: "semgrep",
+			branchTag:   "1.2.3",
+			timestamp:   "20260304-120000",
+			ext:         ".sarif",
+			want:        "myrepo_1.2.3_semgrep_20260304-120000.sarif",
+		},
+		{
+			name:        "branch name omits version",
+			repoName:    "allscan",
+			scannerName: "grype",
+			branchTag:   "main",
+			timestamp:   "20260304-120000",
+			ext:         ".json",
+			want:        "allscan_grype_20260304-120000.json",
+		},
+		{
+			name:        "empty branchTag omits version",
+			repoName:    "myrepo",
+			scannerName: "trivy",
+			branchTag:   "",
+			timestamp:   "20260304-120000",
+			ext:         ".json",
+			want:        "myrepo_trivy_20260304-120000.json",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildScanResultFilename(tt.repoName, tt.scannerName, tt.branchTag, tt.timestamp, tt.ext)
+			if got != tt.want {
+				t.Errorf("buildScanResultFilename() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCheckRequiredEnv(t *testing.T) {
 	tests := []struct {
 		name     string
