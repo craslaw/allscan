@@ -482,7 +482,10 @@ func findGovulncheckOutput(results []ScanResult) string {
 }
 
 // buildReachabilityIndexFromResults builds a ReachabilityIndex from govulncheck
-// output found in the scan results. Returns nil if no govulncheck output is available.
+// output found in the scan results, then expands it using OSV-scanner's ID groups
+// as a pivot point. OSV-scanner groups correlate vulnerability IDs across naming
+// schemes (GO-xxxx, CVE-xxxx, GHSA-xxxx), enabling cross-reference with scanners
+// like grype that use different ID formats than govulncheck.
 func buildReachabilityIndexFromResults(results []ScanResult) parsers.ReachabilityIndex {
 	path := findGovulncheckOutput(results)
 	if path == "" {
@@ -492,7 +495,29 @@ func buildReachabilityIndexFromResults(results []ScanResult) parsers.Reachabilit
 	if err != nil {
 		return nil
 	}
-	return parsers.BuildReachabilityIndex(data)
+	idx := parsers.BuildReachabilityIndex(data)
+
+	// Use OSV-scanner output as a pivot to expand the index with alias groups
+	osvPath := findOSVScannerOutput(results)
+	if osvPath != "" {
+		if osvData, err := os.ReadFile(osvPath); err == nil {
+			groups := parsers.ExtractOSVScannerAliasGroups(osvData)
+			idx.ExpandWithAliasGroups(groups)
+		}
+	}
+
+	return idx
+}
+
+// findOSVScannerOutput returns the output path of a successful, non-SARIF
+// osv-scanner result from the given scan results. Returns "" if not found.
+func findOSVScannerOutput(results []ScanResult) string {
+	for _, r := range results {
+		if r.Scanner == "osv-scanner" && r.Success && !r.IsSarif {
+			return r.OutputPath
+		}
+	}
+	return ""
 }
 
 // enrichSCAResult reads an SCA result's output, extracts findings, and cross-references

@@ -257,6 +257,29 @@ func CrossReferenceReachability(findings []SCAFinding, idx ReachabilityIndex) En
 	return enriched
 }
 
+// ExtractOSVScannerAliasGroups extracts all ID groups from OSV-scanner output.
+// Each group maps related vulnerability IDs together (e.g., GO-2024-0001, CVE-2024-1234, GHSA-xxxx).
+// This makes OSV-scanner the ideal pivot for cross-referencing, since its groups
+// correlate IDs across naming schemes that other scanners use individually.
+func ExtractOSVScannerAliasGroups(data []byte) [][]string {
+	var output osvOutputFull
+	if err := json.Unmarshal(data, &output); err != nil {
+		return nil
+	}
+
+	var groups [][]string
+	for _, result := range output.Results {
+		for _, pkg := range result.Packages {
+			for _, group := range pkg.Groups {
+				if len(group.IDs) > 1 {
+					groups = append(groups, group.IDs)
+				}
+			}
+		}
+	}
+	return groups
+}
+
 // normalizeSeverity converts a severity string to lowercase canonical form.
 func normalizeSeverity(s string) string {
 	switch strings.ToLower(s) {
