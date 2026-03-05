@@ -262,14 +262,6 @@ scanners:
       - "--local=."
       - "--format=json"
       - "--output={{output}}"
-    args_sarif:
-      - "--repo={{repo}}"
-      - "--format=sarif"
-      - "--output={{output}}"
-    args_sarif_local:
-      - "--local=."
-      - "--format=sarif"
-      - "--output={{output}}"
     file_patterns: []
     # Universal scanner - runs on all repos (empty = no restrictions)
     languages: []
