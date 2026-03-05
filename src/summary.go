@@ -607,9 +607,6 @@ func printEnrichedScannerSummary(parser parsers.ResultParser, enriched *parsers.
 
 	fmt.Printf("     %s\n", strings.Join(findings, "  "))
 	fmt.Printf("     %sTotal: %d findings%s\n", ColorDim, enriched.Total, ColorReset)
-	fmt.Printf("     🔬 %sReachability: %s%d reachable%s, %d unreachable, %d unknown%s\n",
-		ColorDim, ColorReset, enriched.Breakdown.Reachable, ColorDim,
-		enriched.Breakdown.Unreachable, enriched.Breakdown.Unknown, ColorReset)
 }
 
 // printReachabilitySummary displays reachability analysis results
