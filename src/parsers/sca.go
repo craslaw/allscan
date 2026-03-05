@@ -63,22 +63,12 @@ var _ SCAParser = (*GrypeParser)(nil)
 // OSV-Scanner checks dependencies against the Open Source Vulnerabilities database.
 type OSVScannerParser struct{}
 
-type osvOutput struct {
-	Results []struct {
-		Packages []struct {
-			Groups []struct {
-				MaxSeverity string `json:"max_severity"`
-			} `json:"groups"`
-		} `json:"packages"`
-	} `json:"results"`
-}
-
 func (p *OSVScannerParser) Name() string { return "osv-scanner" }
 func (p *OSVScannerParser) Type() string { return "SCA" }
 func (p *OSVScannerParser) Icon() string { return "🔎" }
 
 func (p *OSVScannerParser) Parse(data []byte) (FindingSummary, error) {
-	var output osvOutput
+	var output osvOutputFull
 	var summary FindingSummary
 
 	if err := json.Unmarshal(data, &output); err != nil {
@@ -87,9 +77,10 @@ func (p *OSVScannerParser) Parse(data []byte) (FindingSummary, error) {
 
 	for _, result := range output.Results {
 		for _, pkg := range result.Packages {
+			vulnMap := buildVulnSeverityMap(pkg.Vulnerabilities)
 			for _, group := range pkg.Groups {
 				summary.Total++
-				switch strings.ToLower(group.MaxSeverity) {
+				switch resolveGroupSeverity(group.MaxSeverity, group.Aliases, vulnMap) {
 				case "critical":
 					summary.Critical++
 				case "high":
@@ -160,16 +151,85 @@ func ExtractGrypeFindings(data []byte) ([]SCAFinding, error) {
 	return findings, nil
 }
 
+// osvGroup represents a vulnerability group in osv-scanner output.
+// ids contains only the primary advisory ID(s); aliases contains all IDs including CVE/GHSA aliases.
+type osvGroup struct {
+	IDs         []string `json:"ids"`
+	Aliases     []string `json:"aliases"`
+	MaxSeverity string   `json:"max_severity"`
+}
+
+// osvVulnerability represents a single vulnerability record embedded in osv-scanner output.
+// GHSA-prefixed records typically populate database_specific.severity; GO-prefixed records often do not.
+type osvVulnerability struct {
+	ID               string `json:"id"`
+	DatabaseSpecific struct {
+		Severity string `json:"severity"`
+	} `json:"database_specific"`
+}
+
 // osvOutputFull is used for extracting vulnerability IDs from osv-scanner JSON output.
 type osvOutputFull struct {
 	Results []struct {
 		Packages []struct {
-			Groups []struct {
-				IDs         []string `json:"ids"`
-				MaxSeverity string   `json:"max_severity"`
-			} `json:"groups"`
+			Groups          []osvGroup         `json:"groups"`
+			Vulnerabilities []osvVulnerability `json:"vulnerabilities"`
 		} `json:"packages"`
 	} `json:"results"`
+}
+
+// buildVulnSeverityMap builds a map from vulnerability ID to normalized severity
+// using database_specific.severity from each OSV record. Only stores known severities
+// (not "info"), so missing entries signal "no severity data available".
+func buildVulnSeverityMap(vulns []osvVulnerability) map[string]string {
+	m := make(map[string]string, len(vulns))
+	for _, v := range vulns {
+		if norm := normalizeSeverity(v.DatabaseSpecific.Severity); norm != "info" {
+			m[v.ID] = norm
+		}
+	}
+	return m
+}
+
+// severityRank returns a numeric rank for severity comparison (higher = more severe).
+func severityRank(s string) int {
+	switch s {
+	case "critical":
+		return 4
+	case "high":
+		return 3
+	case "medium":
+		return 2
+	case "low":
+		return 1
+	default:
+		return 0
+	}
+}
+
+// higherSeverity returns whichever of a or b ranks higher.
+func higherSeverity(a, b string) string {
+	if severityRank(b) > severityRank(a) {
+		return b
+	}
+	return a
+}
+
+// resolveGroupSeverity returns the best available severity for a vulnerability group.
+// It uses max_severity when it carries a real value, then falls back to the highest
+// severity found among the group's aliases in the per-package vulnerability records.
+// This handles Go advisories (GO-xxxx) that lack CVSS scores but whose GHSA aliases do not.
+func resolveGroupSeverity(maxSeverity string, aliases []string, vulnMap map[string]string) string {
+	if norm := normalizeSeverity(maxSeverity); norm != "info" {
+		return norm
+	}
+	best := "info"
+	for _, id := range aliases {
+		if sev, ok := vulnMap[id]; ok {
+			best = higherSeverity(best, sev)
+		}
+	}
+	return best
 }
 
 // ExtractOSVScannerFindings extracts vulnerability IDs and severities from osv-scanner JSON output.
@@ -182,10 +242,11 @@ func ExtractOSVScannerFindings(data []byte) ([]SCAFinding, error) {
 	var findings []SCAFinding
 	for _, result := range output.Results {
 		for _, pkg := range result.Packages {
+			vulnMap := buildVulnSeverityMap(pkg.Vulnerabilities)
 			for _, group := range pkg.Groups {
 				findings = append(findings, SCAFinding{
 					IDs:      group.IDs,
-					Severity: normalizeSeverity(group.MaxSeverity),
+					Severity: resolveGroupSeverity(group.MaxSeverity, group.Aliases, vulnMap),
 				})
 			}
 		}
@@ -287,7 +348,7 @@ func normalizeSeverity(s string) string {
 		return "critical"
 	case "high":
 		return "high"
-	case "medium":
+	case "medium", "moderate":
 		return "medium"
 	case "low":
 		return "low"

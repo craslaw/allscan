@@ -151,6 +151,18 @@ func TestExtractOSVScannerFindings(t *testing.T) {
 			wantFirst: SCAFinding{IDs: []string{"CVE-2024-1234", "GHSA-xxxx-yyyy-zzzz"}, Severity: "high"},
 		},
 		{
+			name: "falls back to database_specific severity when max_severity is empty",
+			input: `{"results": [{"packages": [{
+				"groups": [{"ids": ["GO-2022-0001"], "aliases": ["GO-2022-0001", "GHSA-xxxx-yyyy-zzzz"], "max_severity": ""}],
+				"vulnerabilities": [
+					{"id": "GO-2022-0001"},
+					{"id": "GHSA-xxxx-yyyy-zzzz", "database_specific": {"severity": "HIGH"}}
+				]
+			}]}]}`,
+			wantCount: 1,
+			wantFirst: SCAFinding{IDs: []string{"GO-2022-0001"}, Severity: "high"},
+		},
+		{
 			name:    "invalid JSON",
 			input:   `{invalid`,
 			wantErr: true,
@@ -394,6 +406,35 @@ func TestOSVScannerParser_Parse(t *testing.T) {
 				{"max_severity": "UNKNOWN"}
 			]}]}]}`,
 			want: FindingSummary{Info: 1, Total: 1},
+		},
+		{
+			name: "moderate severity maps to medium",
+			input: `{"results": [{"packages": [{"groups": [
+				{"max_severity": "MODERATE"}
+			]}]}]}`,
+			want: FindingSummary{Medium: 1, Total: 1},
+		},
+		{
+			name: "empty max_severity falls back to vulnerability database_specific severity",
+			input: `{"results": [{"packages": [{
+				"groups": [{"ids": ["GO-2022-0001"], "aliases": ["GO-2022-0001", "GHSA-xxxx-yyyy-zzzz"], "max_severity": ""}],
+				"vulnerabilities": [
+					{"id": "GO-2022-0001"},
+					{"id": "GHSA-xxxx-yyyy-zzzz", "database_specific": {"severity": "HIGH"}}
+				]
+			}]}]}`,
+			want: FindingSummary{High: 1, Total: 1},
+		},
+		{
+			name: "fallback picks max severity across aliases",
+			input: `{"results": [{"packages": [{
+				"groups": [{"ids": ["GO-2022-0001"], "aliases": ["GO-2022-0001", "GHSA-aaaa-bbbb-cccc", "CVE-2022-1234"], "max_severity": ""}],
+				"vulnerabilities": [
+					{"id": "GHSA-aaaa-bbbb-cccc", "database_specific": {"severity": "MODERATE"}},
+					{"id": "CVE-2022-1234", "database_specific": {"severity": "CRITICAL"}}
+				]
+			}]}]}`,
+			want: FindingSummary{Critical: 1, Total: 1},
 		},
 		{
 			name:    "invalid JSON",
