@@ -171,7 +171,73 @@ If the scanner supports SARIF output, add `args_sarif` with the SARIF format fla
 
 The `binary-detector` scanner uses `builtin:binary-detector` as its command — it has no external binary and is handled directly by the orchestrator.
 
-## Step 5: Update Documentation
+## Step 5: Integrate with ReachabilityIndex (SCA scanners only)
+
+If the new scanner is an SCA scanner, integrate it with the reachability cross-reference system so that govulncheck findings can be correlated against its results.
+
+### What to implement
+
+You need to provide two functions in your parser file (following the pattern in `parsers/sca.go`):
+
+**1. `ExtractXxxFindings(data []byte) ([]SCAFinding, error)`**
+
+Returns a flat list of `SCAFinding` — one entry per vulnerability group, with all associated IDs (CVE, GHSA, GO-xxxx, etc.) and a normalized severity:
+
+```go
+func ExtractTrivyFindings(data []byte) ([]SCAFinding, error) {
+    // parse JSON, collect IDs and severity per finding
+    findings = append(findings, SCAFinding{
+        IDs:      []string{vuln.VulnerabilityID, vuln.CVEID},
+        Severity: normalizeSeverity(vuln.Severity),
+    })
+    return findings, nil
+}
+```
+
+**2. `ExtractTrivyAliasGroups(data []byte) [][]string` (if the scanner groups aliases)**
+
+If the scanner output groups related IDs together (like OSV-scanner does), extract those groups so the index can be expanded:
+
+```go
+func ExtractTrivyAliasGroups(data []byte) [][]string {
+    // return [][]string{{"CVE-2024-1234", "GHSA-xxxx-yyyy-zzzz"}, ...}
+}
+```
+
+If the scanner doesn't expose alias groups, skip this function.
+
+### How it wires together
+
+In `src/main.go`, after running all scanners, the reachability cross-reference is performed:
+
+1. `BuildReachabilityIndex(govulncheckOutput)` — builds the index from govulncheck NDJSON
+2. `idx.ExpandWithAliasGroups(ExtractOSVScannerAliasGroups(...))` — enriches the index with OSV-scanner alias groups
+3. `CrossReferenceReachability(findings, idx)` — returns an `EnrichedSummary` with per-severity reachable counts
+
+Add a similar call for the new scanner alongside the existing ones:
+
+```go
+trivyFindings, _ := parsers.ExtractTrivyFindings(trivyOutput)
+// Optionally expand index with any alias groups the scanner exposes:
+// idx.ExpandWithAliasGroups(parsers.ExtractTrivyAliasGroups(trivyOutput))
+trivyEnriched := parsers.CrossReferenceReachability(trivyFindings, idx)
+```
+
+### Key types (defined in `parsers/sca.go` and `parsers/reachability.go`)
+
+| Type / Function | Purpose |
+|---|---|
+| `SCAFinding` | Single finding: `IDs []string` + normalized `Severity string` |
+| `ReachabilityIndex` | `map[string]bool` — vuln ID → reachable |
+| `BuildReachabilityIndex(data)` | Parses govulncheck NDJSON into the index |
+| `idx.ExpandWithAliasGroups(groups)` | Propagates reachability across alias groups |
+| `idx.Lookup(vulnID)` | Returns `(reachable, known bool)` for a single ID |
+| `CrossReferenceReachability(findings, idx)` | Produces `EnrichedSummary` with reachable counts |
+| `EnrichedSummary` | `FindingSummary` + `CriticalReachable`, `HighReachable`, etc. |
+
+The govulncheck index is Go-ecosystem specific, so only Go-aware SCA scanners (Grype, OSV-scanner, Trivy on Go modules) will see non-zero reachable counts. Including a new scanner in this flow is still valuable — findings with unknown IDs simply appear in `Breakdown.Unknown`.
+
+## Step 6: Update Documentation
 
 1. Add scanner to `README.md` compatibility matrix
-2. Update this file if adding new parser patterns
+2. Update this file if adding new parser patterns or reachability integration patterns
