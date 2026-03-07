@@ -110,9 +110,30 @@ func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath, commitHa
 }
 
 // getScannersForRepo determines which scanners to run on a repository
-// It filters based on repo-specific scanner list, enabled status, and language compatibility
+// It filters based on repo-specific scanner list, enabled status, language compatibility,
+// and the global --scan filter (which overrides enabled status).
 func getScannersForRepo(config *Config, repo RepositoryConfig, detected *DetectedLanguages) []ScannerConfig {
 	var scanners []ScannerConfig
+	scanFilter := config.Global.ScanFilter
+
+	// When --scan filter is active, only run those scanners (overrides enabled status)
+	if len(scanFilter) > 0 {
+		filterSet := make(map[string]bool)
+		for _, name := range scanFilter {
+			filterSet[name] = true
+		}
+		for _, scanner := range config.Scanners {
+			if !filterSet[scanner.Name] {
+				continue
+			}
+			if isScannerCompatible(scanner, detected) {
+				scanners = append(scanners, scanner)
+			} else {
+				log.Printf("    ⏭️  Skipping %s: no compatible languages detected", scanner.Name)
+			}
+		}
+		return scanners
+	}
 
 	// If repo specifies scanners, use only those (still filtered by language)
 	if len(repo.Scanners) > 0 {

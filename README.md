@@ -61,6 +61,8 @@ All commands must be run from the project root directory.
    nix run -- . --repo https://github.com/owner/repo  # Scan a single repo (auto-detects latest release)
    nix run -- . --purl "pkg:npm/express@4.18.2"       # Scan a package by its Package URL (pURL)
    nix run -- . --sarif                               # Output results in SARIF format
+   nix run -- . --scan=trufflehog                      # Run only specific scanner(s)
+   nix run -- . --scan=trufflehog,gosec --local        # Combine with other flags
    ```
 
 ## Development Mode
