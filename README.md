@@ -57,10 +57,10 @@ All commands must be run from the project root directory.
 
 3. Run the orchestrator:
    ```bash
-   nix run                    # Scan repositories from repositories.yaml
-   nix run -- --repo https://github.com/owner/repo  # Scan a single repo (auto-detects latest release)
-   nix run -- --purl "pkg:npm/express@4.18.2"       # Scan a package by its Package URL (pURL)
-   nix run -- --sarif                                # Output results in SARIF format
+   nix run                                            # Scan repositories from repositories.yaml
+   nix run -- . --repo https://github.com/owner/repo  # Scan a single repo (auto-detects latest release)
+   nix run -- . --purl "pkg:npm/express@4.18.2"       # Scan a package by its Package URL (pURL)
+   nix run -- . --sarif                               # Output results in SARIF format
    ```
 
 ## Development Mode
@@ -69,10 +69,10 @@ For local development and testing:
 
 ```bash
 # Scan current directory (no cloning or upload)
-nix run -- --local
+nix run -- . --local
 
 # Preflight check (validate config and environment without running scans)
-nix run -- --preflight
+nix run -- . --preflight
 
 # Run tests (must run from src/ where go.mod is located)
 cd src && go test ./...
