@@ -180,12 +180,10 @@ scanners:
       - "filesystem"
       - "."
       - "--json"
-      - "--no-update"
     args_local:
       - "filesystem"
       - "."
       - "--json"
-      - "--no-update"
     file_patterns: []
     # Universal secrets scanner - runs on all languages (empty = no restrictions)
     languages: []
