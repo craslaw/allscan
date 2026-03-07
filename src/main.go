@@ -428,6 +428,7 @@ func main() {
 				fmt.Fprintf(os.Stderr, "  --%-12s %s\n", f.Name, f.Usage)
 			}
 		})
+		fmt.Fprintf(os.Stderr, "\n")
 	}
 	flag.Parse()
 
