@@ -109,6 +109,11 @@ func uploadSingleResult(config *Config, result ScanResult, authToken string, tag
 		if convertErr != nil {
 			return fmt.Errorf("converting NDJSON to JSON array: %w", convertErr)
 		}
+		// Skip upload if the converted array has no osv entries (DefectDojo rejects files with no vulnerability data)
+		if !containsOSVEntries(converted) {
+			log.Printf("  ⏭️  Skipping %s (no findings to upload)", filepath.Base(result.OutputPath))
+			return nil
+		}
 		uploadReader = bytes.NewReader(converted)
 	}
 
@@ -153,6 +158,25 @@ func uploadSingleResult(config *Config, result ScanResult, authToken string, tag
 		WithEndpoint(config.Global.UploadEndpoint).
 		AddFields(fields)
 	return builder.Send()
+}
+
+// containsOSVEntries reports whether a JSON array (from ndjsonToJSONArray) contains
+// at least one entry with an "osv" key, i.e., actual vulnerability findings.
+func containsOSVEntries(data []byte) bool {
+	var entries []json.RawMessage
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		var obj map[string]json.RawMessage
+		if err := json.Unmarshal(entry, &obj); err != nil {
+			continue
+		}
+		if _, ok := obj["osv"]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // ndjsonToJSONArray converts concatenated JSON objects into a JSON array.

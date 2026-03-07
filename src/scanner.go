@@ -381,6 +381,7 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 				CommitHash:   commitHash,
 				BranchTag:    branchTag,
 				IsSarif:      isSarif,
+				NDJSON:       scanner.NDJSON,
 			}
 		}
 
@@ -398,6 +399,7 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 					CommitHash:   commitHash,
 					BranchTag:    branchTag,
 					IsSarif:      isSarif,
+					NDJSON:       scanner.NDJSON,
 				}
 			}
 		}
