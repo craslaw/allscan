@@ -418,6 +418,8 @@ func main() {
 	repo := flag.String("repo", "", "Scan a single repository by URL (uses latest tagged release if available)")
 	purlFlag := flag.String("purl", "", "Scan a package by its Package URL (pURL), e.g. pkg:github/owner/repo@v1.0.0")
 	product := flag.String("product", "", "Product name for DefectDojo uploads (overrides auto-detected name)")
+	productType := flag.String("product-type", "", "Product type name for DefectDojo uploads (e.g. \"Research and Development\")")
+	scan := flag.String("scan", "", "Run only the specified scanner(s), comma-separated by name (e.g., --scan=trufflehog,gosec)")
 	sarif := flag.Bool("sarif", false, "Output scan results in SARIF format (for scanners that support it)")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: allscan [options]\n\nOptions:\n")
@@ -432,6 +434,17 @@ func main() {
 	}
 	flag.Parse()
 
+	// Parse --scan into a list of scanner names
+	var scanFilter []string
+	if *scan != "" {
+		for _, s := range strings.Split(*scan, ",") {
+			s = strings.TrimSpace(s)
+			if s != "" {
+				scanFilter = append(scanFilter, s)
+			}
+		}
+	}
+
 	// --local is incompatible with --repo and --purl
 	if *local && (*repo != "" || *purlFlag != "") {
 		log.Fatalf("Flag --local cannot be combined with --repo or --purl")
@@ -445,12 +458,38 @@ func main() {
 
 	// Store CLI-only overrides in config
 	config.Global.ProductOverride = *product
+	config.Global.ProductTypeOverride = *productType
 	config.Global.SarifMode = *sarif
 
 	// Parse timeouts
 	if err := parseTimeouts(config); err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+
+	// Validate --scan filter against configured scanner names
+	if len(scanFilter) > 0 {
+		available := make(map[string]bool)
+		for _, s := range config.Scanners {
+			available[s.Name] = true
+		}
+		var invalid []string
+		for _, name := range scanFilter {
+			if !available[name] {
+				invalid = append(invalid, name)
+			}
+		}
+		if len(invalid) > 0 {
+			var names []string
+			for _, s := range config.Scanners {
+				names = append(names, s.Name)
+			}
+			log.Fatalf("Unknown scanner(s): %s\nAvailable scanners: %s",
+				strings.Join(invalid, ", "), strings.Join(names, ", "))
+		}
+	}
+
+	// Store scan filter in config for use by scanner functions
+	config.Global.ScanFilter = scanFilter
 
 	// Local mode: scan current directory
 	if *local {
@@ -515,7 +554,11 @@ func main() {
 
 	log.Printf("🔍 Vulnerability Scanner Orchestrator")
 	log.Printf("Config: %s", *configPath)
-	log.Printf("Enabled scanners: %d", countEnabledScanners(config))
+	if len(scanFilter) > 0 {
+		log.Printf("Selected scanners: %s", strings.Join(scanFilter, ", "))
+	} else {
+		log.Printf("Enabled scanners: %d", countEnabledScanners(config))
+	}
 	log.Printf("Target repos: %d", len(config.Repositories))
 
 	// Create workspace and results dirs
@@ -568,7 +611,11 @@ func runLocalMode(config *Config) {
 
 	log.Printf("🔍 Vulnerability Scanner Orchestrator")
 	log.Printf("📂 Local mode: scanning %s", cwd)
-	log.Printf("Enabled scanners: %d", countEnabledScanners(config))
+	if len(config.Global.ScanFilter) > 0 {
+		log.Printf("Selected scanners: %s", strings.Join(config.Global.ScanFilter, ", "))
+	} else {
+		log.Printf("Enabled scanners: %d", countEnabledScanners(config))
+	}
 
 	// Create results directory
 	if err := setupDirectories(config); err != nil {

@@ -27,8 +27,10 @@ type GlobalConfig struct {
 	UploadEndpoint  string `yaml:"upload_endpoint"`
 	MaxConcurrent   int    `yaml:"max_concurrent"`
 	FailFast        bool   `yaml:"fail_fast"`
-	ProductOverride string `yaml:"-"` // CLI-only: overrides auto-detected product name for DefectDojo
-	SarifMode       bool   `yaml:"-"` // CLI-only: output scan results in SARIF format
+	ProductOverride     string   `yaml:"-"` // CLI-only: overrides auto-detected product name for DefectDojo
+	ProductTypeOverride string   `yaml:"-"` // CLI-only: overrides product_type_name for DefectDojo
+	SarifMode           bool     `yaml:"-"` // CLI-only: output scan results in SARIF format
+	ScanFilter          []string `yaml:"-"` // CLI-only: run only these scanners (overrides enabled status)
 }
 
 // ScannerConfig defines a security scanner and its execution parameters

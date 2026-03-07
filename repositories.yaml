@@ -12,8 +12,6 @@ repositories:
     branch: "main"
 
   # === AUTO-GENERATED SCANNER VERSIONS FROM LOCKED NIXPKGS ===
-  - url: "https://github.com/gitleaks/gitleaks"
-    version: "v8.30.0"
   - url: "https://github.com/golangci/golangci-lint"
     version: "v2.10.1"
   - url: "https://github.com/securego/gosec"
@@ -26,4 +24,6 @@ repositories:
     version: "v2.3.2"
   - url: "https://github.com/anchore/syft"
     version: "v1.41.2"
+  - url: "https://github.com/trufflesecurity/trufflehog"
+    version: "v3.93.2"
   # === END AUTO-GENERATED ===

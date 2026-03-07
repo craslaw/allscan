@@ -144,6 +144,79 @@ func TestGetScannersForRepo(t *testing.T) {
 	}
 }
 
+func TestGetScannersForRepoWithScanFilter(t *testing.T) {
+	allScanners := []ScannerConfig{
+		{Name: "grype", Enabled: true, Languages: []string{}},            // universal
+		{Name: "gosec", Enabled: true, Languages: []string{"go"}},        // go-specific
+		{Name: "semgrep", Enabled: false, Languages: []string{}},          // disabled
+		{Name: "java-scanner", Enabled: true, Languages: []string{"java"}}, // java-specific
+	}
+
+	tests := []struct {
+		name       string
+		scanFilter []string
+		detected   *DetectedLanguages
+		wantNames  []string
+	}{
+		{
+			name:       "filter selects only matching scanners",
+			scanFilter: []string{"gosec"},
+			detected:   &DetectedLanguages{Languages: []string{"go"}},
+			wantNames:  []string{"gosec"},
+		},
+		{
+			name:       "filter overrides enabled status (disabled scanner included)",
+			scanFilter: []string{"semgrep"},
+			detected:   &DetectedLanguages{Languages: []string{"go"}},
+			wantNames:  []string{"semgrep"},
+		},
+		{
+			name:       "filter still respects language compatibility",
+			scanFilter: []string{"gosec"},
+			detected:   &DetectedLanguages{Languages: []string{"java"}},
+			wantNames:  nil,
+		},
+		{
+			name:       "multiple scanners in filter",
+			scanFilter: []string{"grype", "gosec"},
+			detected:   &DetectedLanguages{Languages: []string{"go"}},
+			wantNames:  []string{"grype", "gosec"},
+		},
+		{
+			name:       "empty filter falls back to default behavior",
+			scanFilter: []string{},
+			detected:   &DetectedLanguages{Languages: []string{"go"}},
+			wantNames:  []string{"grype", "gosec"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				Scanners: allScanners,
+				Global:   GlobalConfig{ScanFilter: tt.scanFilter},
+			}
+			repo := RepositoryConfig{URL: "https://github.com/org/repo"}
+			got := getScannersForRepo(config, repo, tt.detected)
+
+			gotNames := make([]string, len(got))
+			for i, s := range got {
+				gotNames[i] = s.Name
+			}
+
+			if len(gotNames) != len(tt.wantNames) {
+				t.Errorf("getScannersForRepo() returned %v, want %v", gotNames, tt.wantNames)
+				return
+			}
+			for i := range gotNames {
+				if gotNames[i] != tt.wantNames[i] {
+					t.Errorf("scanner[%d] = %q, want %q", i, gotNames[i], tt.wantNames[i])
+				}
+			}
+		})
+	}
+}
+
 func TestSelectArgs(t *testing.T) {
 	baseArgs := []string{"-fmt=json", "-out={{output}}", "./..."}
 	localArgs := []string{"-fmt=json", "-out={{output}}"}

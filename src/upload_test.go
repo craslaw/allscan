@@ -162,6 +162,49 @@ func TestNdjsonToJSONArray(t *testing.T) {
 	}
 }
 
+func TestContainsOSVEntries(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{
+			name:  "has osv entry",
+			input: `[{"osv":{"id":"GO-2024-0001"}}]`,
+			want:  true,
+		},
+		{
+			name:  "only config entry (no findings)",
+			input: `[{"config":{"scanner_name":"govulncheck"}}]`,
+			want:  false,
+		},
+		{
+			name:  "config and finding but no osv",
+			input: `[{"config":{"version":"1.0"}},{"finding":{"osv":"GO-2024-0001"}}]`,
+			want:  false,
+		},
+		{
+			name:  "empty array",
+			input: `[]`,
+			want:  false,
+		},
+		{
+			name:  "null (empty ndjson input)",
+			input: `null`,
+			want:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := containsOSVEntries([]byte(tt.input))
+			if got != tt.want {
+				t.Errorf("containsOSVEntries(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestComputeReachabilityTags(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -1,39 +1,47 @@
 package parsers
 
 import (
+	"bytes"
 	"encoding/json"
 )
 
 // ============================================================================
-// Gitleaks Parser - Secret Detection Scanner
+// TruffleHog Parser - Secret Detection Scanner
 // ============================================================================
 
-// GitleaksParser parses Gitleaks secret detection results.
-// Gitleaks detects hardcoded secrets like passwords, API keys, and tokens.
-type GitleaksParser struct{}
+// TrufflehogParser parses TruffleHog secret detection results.
+// TruffleHog outputs NDJSON (one JSON object per line) to stdout.
+// Verified secrets are mapped to Critical severity, unverified to Medium.
+type TrufflehogParser struct{}
 
-type gitleaksOutput []struct {
-	RuleID      string `json:"RuleID"`
-	Description string `json:"Description"`
+type trufflehogFinding struct {
+	DetectorName string `json:"DetectorName"`
+	Verified     bool   `json:"Verified"`
 }
 
-func (p *GitleaksParser) Name() string { return "gitleaks" }
-func (p *GitleaksParser) Type() string { return "Secrets" }
-func (p *GitleaksParser) Icon() string { return "🔑" }
+func (p *TrufflehogParser) Name() string { return "trufflehog" }
+func (p *TrufflehogParser) Type() string { return "Secrets" }
+func (p *TrufflehogParser) Icon() string { return "🔑" }
 
-func (p *GitleaksParser) Parse(data []byte) (FindingSummary, error) {
-	var output gitleaksOutput
+func (p *TrufflehogParser) Parse(data []byte) (FindingSummary, error) {
 	var summary FindingSummary
 
-	if err := json.Unmarshal(data, &output); err != nil {
-		return summary, err
+	dec := json.NewDecoder(bytes.NewReader(data))
+	for dec.More() {
+		var finding trufflehogFinding
+		if err := dec.Decode(&finding); err != nil {
+			return summary, err
+		}
+		summary.Total++
+		if finding.Verified {
+			summary.Critical++
+		} else {
+			summary.Medium++
+		}
 	}
-
-	summary.Total = len(output)
-	summary.High = len(output) // Treat all secrets as high severity
 
 	return summary, nil
 }
 
-// Verify GitleaksParser implements SecretsParser
-var _ SecretsParser = (*GitleaksParser)(nil)
+// Verify TrufflehogParser implements SecretsParser
+var _ SecretsParser = (*TrufflehogParser)(nil)

@@ -22,6 +22,10 @@ nix run -- --purl "pkg:npm/express@4.18.2"
 # Run in local mode (scan current directory, no upload)
 nix run -- --local
 
+# Run only specific scanners (overrides enabled status)
+nix run -- --scan=trufflehog
+nix run -- --scan=trufflehog,gosec --local
+
 # Output results in SARIF format (for scanners that support it)
 nix run -- --sarif
 

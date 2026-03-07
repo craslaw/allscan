@@ -442,7 +442,15 @@ func printScannerSummary(parser parsers.ResultParser, summary parsers.FindingSum
 
 	// Special handling for Secrets scanners
 	if scanType == "Secrets" {
-		fmt.Printf("     %s🚨 Secrets detected: %d%s\n", ColorRed, summary.Total, ColorReset)
+		var findings []string
+		if summary.Critical > 0 {
+			findings = append(findings, fmt.Sprintf("%s%s🔴 Verified: %d%s", ColorRed, ColorBold, summary.Critical, ColorReset))
+		}
+		if summary.Medium > 0 {
+			findings = append(findings, fmt.Sprintf("%s🟡 Unverified: %d%s", ColorYellow, summary.Medium, ColorReset))
+		}
+		fmt.Printf("     %s\n", strings.Join(findings, "  "))
+		fmt.Printf("     %sTotal: %d secrets%s\n", ColorDim, summary.Total, ColorReset)
 		return
 	}
 

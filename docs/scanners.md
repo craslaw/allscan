@@ -18,8 +18,8 @@
       ┌────┴────┐              │                   │                   
       ▼         ▼              ▼                   ▼                   
   ┌────────┐ ┌────────┐  ┌──────────┐      ┌────────────┐              
-  │ Grype  │ │  OSV   │  │  Gosec   │      │  Gitleaks  │              
-  │ Parser │ │ Parser │  │  Parser  │      │   Parser   │              
+  │ Grype  │ │  OSV   │  │  Gosec   │      │ Trufflehog │
+  │ Parser │ │ Parser │  │  Parser  │      │   Parser   │
   └────────┘ └────────┘  └──────────┘      └────────────┘              
                                                                        
   Key Components                                                       
@@ -53,7 +53,7 @@ Scanner binaries must be available in the `nix develop` shell.
 # flake.nix - add to scanners list
 scanners = with pkgs; [
   gosec
-  gitleaks
+  trufflehog
   new-scanner  # Add here
 ];
 ```

@@ -110,9 +110,30 @@ func runScannersOnRepo(config *Config, repo RepositoryConfig, repoPath, commitHa
 }
 
 // getScannersForRepo determines which scanners to run on a repository
-// It filters based on repo-specific scanner list, enabled status, and language compatibility
+// It filters based on repo-specific scanner list, enabled status, language compatibility,
+// and the global --scan filter (which overrides enabled status).
 func getScannersForRepo(config *Config, repo RepositoryConfig, detected *DetectedLanguages) []ScannerConfig {
 	var scanners []ScannerConfig
+	scanFilter := config.Global.ScanFilter
+
+	// When --scan filter is active, only run those scanners (overrides enabled status)
+	if len(scanFilter) > 0 {
+		filterSet := make(map[string]bool)
+		for _, name := range scanFilter {
+			filterSet[name] = true
+		}
+		for _, scanner := range config.Scanners {
+			if !filterSet[scanner.Name] {
+				continue
+			}
+			if isScannerCompatible(scanner, detected) {
+				scanners = append(scanners, scanner)
+			} else {
+				log.Printf("    ⏭️  Skipping %s: no compatible languages detected", scanner.Name)
+			}
+		}
+		return scanners
+	}
 
 	// If repo specifies scanners, use only those (still filtered by language)
 	if len(repo.Scanners) > 0 {
@@ -185,6 +206,18 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	// Select args based on SARIF and local mode
 	localMode := isLocalRepo(repo)
 	selectedArgs, isSarif := selectArgs(scanner, config.Global.SarifMode, localMode)
+
+	// Skip scanners without SARIF support in SARIF mode
+	if config.Global.SarifMode && !isSarif {
+		log.Printf("    ⚠️  Skipping %s: no SARIF output support", scanner.Name)
+		return ScanResult{
+			Scanner:    scanner.Name,
+			Repository: repo.URL,
+			Success:    false,
+			Error:      fmt.Errorf("no SARIF output support"),
+			Duration:   time.Since(start),
+		}
+	}
 
 	// Check required environment variables before doing any work
 	if missing := checkRequiredEnv(scanner.RequiredEnv); missing != "" {
@@ -348,6 +381,7 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 				CommitHash:   commitHash,
 				BranchTag:    branchTag,
 				IsSarif:      isSarif,
+				NDJSON:       scanner.NDJSON,
 			}
 		}
 
@@ -365,6 +399,7 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 					CommitHash:   commitHash,
 					BranchTag:    branchTag,
 					IsSarif:      isSarif,
+					NDJSON:       scanner.NDJSON,
 				}
 			}
 		}
