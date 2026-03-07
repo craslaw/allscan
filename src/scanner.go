@@ -186,6 +186,18 @@ func runScanner(config *Config, scanner ScannerConfig, repo RepositoryConfig, re
 	localMode := isLocalRepo(repo)
 	selectedArgs, isSarif := selectArgs(scanner, config.Global.SarifMode, localMode)
 
+	// Skip scanners without SARIF support in SARIF mode
+	if config.Global.SarifMode && !isSarif {
+		log.Printf("    ⚠️  Skipping %s: no SARIF output support", scanner.Name)
+		return ScanResult{
+			Scanner:    scanner.Name,
+			Repository: repo.URL,
+			Success:    false,
+			Error:      fmt.Errorf("no SARIF output support"),
+			Duration:   time.Since(start),
+		}
+	}
+
 	// Check required environment variables before doing any work
 	if missing := checkRequiredEnv(scanner.RequiredEnv); missing != "" {
 		log.Printf("    ⏭️  Skipping %s: required env var %s not set", scanner.Name, missing)

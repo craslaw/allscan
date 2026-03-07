@@ -14,7 +14,7 @@
         # Scanner packages with their GitHub URLs for version tracking
         scannerInfo = {
           gosec = { pkg = pkgs.gosec; url = "https://github.com/securego/gosec"; };
-          gitleaks = { pkg = pkgs.gitleaks; url = "https://github.com/gitleaks/gitleaks"; };
+          trufflehog = { pkg = pkgs.trufflehog; url = "https://github.com/trufflesecurity/trufflehog"; };
           golangci-lint = { pkg = pkgs.golangci-lint; url = "https://github.com/golangci/golangci-lint"; };
           osv-scanner = { pkg = pkgs.osv-scanner; url = "https://github.com/google/osv-scanner"; };
           grype = { pkg = pkgs.grype; url = "https://github.com/anchore/grype"; };

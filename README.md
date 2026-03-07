@@ -14,7 +14,7 @@ Allscan automatically selects scanners based on detected repository languages. S
 | osv-scanner | SCA | Go, Python, JavaScript, TypeScript, Java, C, C++, Ruby, PHP, Rust, Dart, Elixir, Haskell, R, C# | Yes |
 | grype | SCA | Go, Python, JavaScript, TypeScript, Java, C, C++, Ruby, PHP, Rust, Swift, Dart | Yes |
 | govulncheck | Reachability | Go | No |
-| gitleaks | Secrets | *Universal* | Yes |
+| trufflehog | Secrets | *Universal* | No |
 | binary-detector | Binary | *Universal* | No |
 | scorecard | Posture | *Universal* | Yes |
 
@@ -27,7 +27,7 @@ Allscan automatically selects scanners based on detected repository languages. S
 - **Binary** - Binary file detection
 - **Posture** - Security posture/health metrics (OpenSSF Scorecard)
 - ***Universal*** - Runs on all repositories regardless of detected language
-- **SARIF** - Whether the scanner supports SARIF output via `--sarif` flag (scanners without SARIF support fall back to JSON)
+- **SARIF** - Whether the scanner supports SARIF output via `--sarif` flag (scanners without SARIF support are skipped in SARIF mode)
 
 # Use
 
@@ -84,7 +84,7 @@ cd src && go run . --local --config ../scanners.yaml --repos ../repositories.yam
 ## Dependency Management & Version Pinning
 
 Allscan scans its own dependencies to ensure supply chain security. The `repositories.yaml` file contains:
-- Scanner tool repositories (gosec, gitleaks, etc.)
+- Scanner tool repositories (gosec, trufflehog, etc.)
 - Nix flake inputs (flake-utils)
 - Go module dependencies (from go.sum)
 

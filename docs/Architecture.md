@@ -47,7 +47,7 @@ allscan/
 │       ├── parser.go             # Interfaces and registry
 │       ├── sca.go                # GrypeParser, OSVScannerParser
 │       ├── sast.go               # GosecParser
-│       ├── secrets.go            # GitleaksParser
+│       ├── secrets.go            # TrufflehogParser
 │       ├── binary.go             # BinaryDetectorParser
 │       ├── scorecard.go          # ScorecardParser
 │       └── *_test.go             # Parser unit tests

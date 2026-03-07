@@ -171,37 +171,25 @@ scanners:
     languages: []
     timeout: "5m"
     
-  - name: "gitleaks"
+  - name: "trufflehog"
     enabled: true
-    dojo_scan_type: "Gitleaks Scan"
-    command: "gitleaks"
+    dojo_scan_type: "Trufflehog Scan"
+    command: "trufflehog"
+    ndjson: true
     args:
-      - "detect"
-      - "--source=."
-      - "--report-format=json"
-      - "--report-path={{output}}"
-      - "--no-git"
-    # Local mode: respect .gitignore by not using --no-git
+      - "filesystem"
+      - "."
+      - "--json"
+      - "--no-update"
     args_local:
-      - "detect"
-      - "--source=."
-      - "--report-format=json"
-      - "--report-path={{output}}"
-    args_sarif:
-      - "detect"
-      - "--source=."
-      - "--report-format=sarif"
-      - "--report-path={{output}}"
-      - "--no-git"
-    args_sarif_local:
-      - "detect"
-      - "--source=."
-      - "--report-format=sarif"
-      - "--report-path={{output}}"
+      - "filesystem"
+      - "."
+      - "--json"
+      - "--no-update"
     file_patterns: []
     # Universal secrets scanner - runs on all languages (empty = no restrictions)
     languages: []
-    timeout: "3m"
+    timeout: "5m"
 
   - name: "binary-detector"
     enabled: true

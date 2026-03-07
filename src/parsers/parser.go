@@ -51,7 +51,7 @@ var registry = map[string]ResultParser{
 	"grype":           &GrypeParser{},
 	"osv-scanner":     &OSVScannerParser{},
 	"gosec":           &GosecParser{},
-	"gitleaks":        &GitleaksParser{},
+	"trufflehog":      &TrufflehogParser{},
 	"binary-detector": &BinaryParser{},
 	"scorecard":       &ScorecardParser{},
 	"govulncheck":     &GovulncheckParser{},
