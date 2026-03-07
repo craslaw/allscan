@@ -418,6 +418,7 @@ func main() {
 	repo := flag.String("repo", "", "Scan a single repository by URL (uses latest tagged release if available)")
 	purlFlag := flag.String("purl", "", "Scan a package by its Package URL (pURL), e.g. pkg:github/owner/repo@v1.0.0")
 	product := flag.String("product", "", "Product name for DefectDojo uploads (overrides auto-detected name)")
+	productType := flag.String("product-type", "", "Product type name for DefectDojo uploads (e.g. \"Research and Development\")")
 	scan := flag.String("scan", "", "Run only the specified scanner(s), comma-separated by name (e.g., --scan=trufflehog,gosec)")
 	sarif := flag.Bool("sarif", false, "Output scan results in SARIF format (for scanners that support it)")
 	flag.Usage = func() {
@@ -457,6 +458,7 @@ func main() {
 
 	// Store CLI-only overrides in config
 	config.Global.ProductOverride = *product
+	config.Global.ProductTypeOverride = *productType
 	config.Global.SarifMode = *sarif
 
 	// Parse timeouts

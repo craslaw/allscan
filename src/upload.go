@@ -117,13 +117,18 @@ func uploadSingleResult(config *Config, result ScanResult, authToken string, tag
 		productName = config.Global.ProductOverride
 	}
 
+	productTypeName := "Research and Development"
+	if config.Global.ProductTypeOverride != "" {
+		productTypeName = config.Global.ProductTypeOverride
+	}
+
 	fields := map[string]string{
 		"scan_date":           time.Now().Format("2006-01-02"),
 		"product_name":        productName,
 		"engagement_name":     fmt.Sprintf("%s-%s", productName, result.Scanner),
 		"scan_type":           result.DojoScanType,
 		"auto_create_context": "true",
-		"product_type_name":   "Research and Development",
+		"product_type_name":   productTypeName,
 		"do_not_reactivate":   "true",
 	}
 
