@@ -683,7 +683,7 @@ func runPreflight(config *Config, localMode bool) {
 			}
 		}
 		if clones > 0 {
-			fmt.Printf("  %s⚠️   Workspace has %d existing clone(s) in %s (consider cleaning up)%s\n",
+			fmt.Printf("  %s⚠️  Workspace has %d existing clone(s) in %s (consider cleaning up)%s\n",
 				ColorYellow, clones, config.Global.Workspace, ColorReset)
 		}
 	}
@@ -696,24 +696,34 @@ func runPreflight(config *Config, localMode bool) {
 		strings.Repeat("─", 48), strings.Repeat("─", 7), strings.Repeat("─", 6))
 
 	for _, scanner := range config.Scanners {
-		binaryPath, err := exec.LookPath(scanner.Command)
-		pathStr := binaryPath
-		pathColor := ColorGreen
+		var pathStr, pathColor, statusStr string
 
-		var statusStr string
-		if !scanner.Enabled {
-			statusStr = ColorDim + "⛔ OFF" + ColorReset
-		} else if err != nil {
-			statusStr = ColorRed + "❌ ON " + ColorReset
-		} else {
-			statusStr = ColorGreen + "✅ ON " + ColorReset
-		}
-
-		if err != nil {
-			pathStr = "NOT FOUND"
-			pathColor = ColorRed
+		if strings.HasPrefix(scanner.Command, "builtin:") {
+			// Built-in scanners have no external binary — always available
+			pathStr = "(built-in)"
+			pathColor = ColorGreen
 			if scanner.Enabled {
-				issues++
+				statusStr = ColorGreen + "✅ ON " + ColorReset
+			} else {
+				statusStr = ColorDim + "⛔ OFF" + ColorReset
+			}
+		} else {
+			binaryPath, err := exec.LookPath(scanner.Command)
+			pathStr = binaryPath
+			pathColor = ColorGreen
+			if !scanner.Enabled {
+				statusStr = ColorDim + "⛔ OFF" + ColorReset
+			} else if err != nil {
+				statusStr = ColorRed + "❌ ON " + ColorReset
+			} else {
+				statusStr = ColorGreen + "✅ ON " + ColorReset
+			}
+			if err != nil {
+				pathStr = "NOT FOUND"
+				pathColor = ColorRed
+				if scanner.Enabled {
+					issues++
+				}
 			}
 		}
 
@@ -755,10 +765,8 @@ func runPreflight(config *Config, localMode bool) {
 
 	fmt.Println()
 	if issues > 0 {
-		fmt.Printf("%s⚠️  Preflight found %d issue(s). Resolve before running scans.%s\n\n", ColorYellow, issues, ColorReset)
 		os.Exit(1)
 	}
-	fmt.Printf("%s✅  All checks passed.%s\n\n", ColorGreen, ColorReset)
 }
 
 // cleanupOldResults removes scan result files older than resultsMaxAge
