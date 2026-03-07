@@ -413,7 +413,7 @@ func main() {
 	// Parse command line flags
 	configPath := flag.String("config", "scanners.yaml", "Path to config file")
 	reposPath := flag.String("repos", "repositories.yaml", "Path to repositories config file")
-	dryRun := flag.Bool("dry-run", false, "Print what would be done without executing")
+	preflight := flag.Bool("preflight", false, "Validate configuration and check environment without running scans")
 	local := flag.Bool("local", false, "Scan current directory instead of cloning repos (skips upload)")
 	repo := flag.String("repo", "", "Scan a single repository by URL (uses latest tagged release if available)")
 	purlFlag := flag.String("purl", "", "Scan a package by its Package URL (pURL), e.g. pkg:github/owner/repo@v1.0.0")
@@ -451,16 +451,18 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Check required environment variables for all enabled scanners
-	if missing := checkAllRequiredEnv(config, *local); len(missing) > 0 {
-		if !promptContinue(missing) {
-			log.Fatalf("Aborted: missing required environment variables")
-		}
-	}
-
 	// Local mode: scan current directory
 	if *local {
-		runLocalMode(config, *dryRun)
+		if *preflight {
+			runPreflight(config, true)
+			return
+		}
+		if missing := checkAllRequiredEnv(config, true); len(missing) > 0 {
+			if !promptContinue(missing) {
+				log.Fatalf("Aborted: missing required environment variables")
+			}
+		}
+		runLocalMode(config)
 		return
 	}
 
@@ -499,16 +501,21 @@ func main() {
 
 	config.Repositories = targets
 
+	if *preflight {
+		runPreflight(config, false)
+		return
+	}
+
+	if missing := checkAllRequiredEnv(config, false); len(missing) > 0 {
+		if !promptContinue(missing) {
+			log.Fatalf("Aborted: missing required environment variables")
+		}
+	}
+
 	log.Printf("🔍 Vulnerability Scanner Orchestrator")
 	log.Printf("Config: %s", *configPath)
 	log.Printf("Enabled scanners: %d", countEnabledScanners(config))
 	log.Printf("Target repos: %d", len(config.Repositories))
-
-	if *dryRun {
-		log.Printf("DRY RUN MODE - No scans will be executed")
-		printDryRun(config)
-		return
-	}
 
 	// Create workspace and results dirs
 	if err := setupDirectories(config); err != nil {
@@ -549,7 +556,7 @@ func main() {
 }
 
 // runLocalMode scans the current directory without cloning or uploading
-func runLocalMode(config *Config, dryRun bool) {
+func runLocalMode(config *Config) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		log.Fatalf("Failed to get current directory: %v", err)
@@ -561,29 +568,6 @@ func runLocalMode(config *Config, dryRun bool) {
 	log.Printf("🔍 Vulnerability Scanner Orchestrator")
 	log.Printf("📂 Local mode: scanning %s", cwd)
 	log.Printf("Enabled scanners: %d", countEnabledScanners(config))
-
-	if dryRun {
-		log.Printf("DRY RUN MODE - No scans will be executed")
-		if config.Global.SarifMode {
-			log.Printf("SARIF mode: enabled")
-		}
-		log.Printf("\nSBOM Generation:")
-		log.Printf("  Tool: syft (CycloneDX JSON)")
-		log.Printf("  Output: %s/sboms/", config.Global.ResultsDir)
-		log.Printf("\nEnabled Scanners:")
-		for _, scanner := range config.Scanners {
-			if scanner.Enabled {
-				selectedArgs, isSarif := selectArgs(scanner, config.Global.SarifMode, true)
-				format := "JSON"
-				if isSarif {
-					format = "SARIF"
-				}
-				log.Printf("  - %s (timeout: %s, format: %s)", scanner.Name, scanner.Timeout, format)
-				log.Printf("    Command: %s %s", scanner.Command, strings.Join(selectedArgs, " "))
-			}
-		}
-		return
-	}
 
 	// Create results directory
 	if err := setupDirectories(config); err != nil {
@@ -623,47 +607,158 @@ func runLocalMode(config *Config, dryRun bool) {
 	log.Printf("📝 Local mode: results saved to %s (upload skipped)", config.Global.ResultsDir)
 }
 
-// printDryRun displays what would be executed without running anything
-func printDryRun(config *Config) {
-	log.Printf("\n=== DRY RUN ===\n")
+// runPreflight validates configuration, checks the environment, and prints a
+// summary of all configured scanners and repositories without running any scans.
+func runPreflight(config *Config, localMode bool) {
+	issues := 0
 
-	log.Printf("Global Configuration:")
-	log.Printf("  Workspace: %s", config.Global.Workspace)
-	log.Printf("  Results Dir: %s", config.Global.ResultsDir)
-	log.Printf("  Upload Endpoint: %s", config.Global.UploadEndpoint)
-	log.Printf("  Max Concurrent: %d", config.Global.MaxConcurrent)
-	log.Printf("  Fail Fast: %v", config.Global.FailFast)
+	fmt.Printf("\n%s=== PREFLIGHT CHECK ===%s\n", ColorBold, ColorReset)
+
+	// Global configuration
+	fmt.Printf("\n%sGlobal Configuration:%s\n", ColorBold, ColorReset)
+	fmt.Printf("  %-18s %s\n", "Workspace:", config.Global.Workspace)
+	fmt.Printf("  %-18s %s\n", "Results Dir:", config.Global.ResultsDir)
+	fmt.Printf("  %-18s %d\n", "Max Concurrent:", config.Global.MaxConcurrent)
+	fmt.Printf("  %-18s %v\n", "Fail Fast:", config.Global.FailFast)
 	if config.Global.SarifMode {
-		log.Printf("  SARIF Mode: enabled")
+		fmt.Printf("  %-18s enabled\n", "SARIF Mode:")
+	}
+	if config.Global.UploadEndpoint != "" {
+		if os.Getenv("VULN_MGMT_API_TOKEN") != "" {
+			fmt.Printf("  %-18s %s %s(token: SET)%s\n", "Upload:", config.Global.UploadEndpoint, ColorGreen, ColorReset)
+		} else {
+			fmt.Printf("  %-18s %s %s(token: NOT SET)%s\n", "Upload:", config.Global.UploadEndpoint, ColorYellow, ColorReset)
+			issues++
+		}
+	} else {
+		fmt.Printf("  %-18s (not configured)\n", "Upload:")
 	}
 
-	log.Printf("\nEnabled Scanners:")
+	// Binary / environment checks
+	fmt.Printf("\n%sEnvironment:%s\n", ColorBold, ColorReset)
+	for _, bin := range []string{"git", "syft"} {
+		path, err := exec.LookPath(bin)
+		if err != nil {
+			fmt.Printf("  %s❌  %-8s NOT FOUND%s — is nix develop active?\n", ColorRed, bin, ColorReset)
+			issues++
+		} else {
+			fmt.Printf("  %s✅  %-8s%s %s\n", ColorGreen, bin, ColorReset, path)
+		}
+	}
+
+	// Directory checks — only print if there is a problem
+	for _, d := range []struct{ label, path string }{
+		{"Workspace", config.Global.Workspace},
+		{"Results Dir", config.Global.ResultsDir},
+	} {
+		info, err := os.Stat(d.path)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				fmt.Printf("  %s⚠️   %s: cannot access %s: %v%s\n", ColorYellow, d.label, d.path, err, ColorReset)
+				issues++
+			}
+			// Does not exist yet — will be created on first run, no issue
+		} else if !info.IsDir() {
+			fmt.Printf("  %s❌  %s: %s exists but is not a directory%s\n", ColorRed, d.label, d.path, ColorReset)
+			issues++
+		} else {
+			tmp, err := os.CreateTemp(d.path, ".preflight-*")
+			if err != nil {
+				fmt.Printf("  %s❌  %s: %s is not writable: %v%s\n", ColorRed, d.label, d.path, err, ColorReset)
+				issues++
+			} else {
+				tmp.Close()
+				os.Remove(tmp.Name())
+			}
+		}
+	}
+
+	// Stale workspace check
+	if info, err := os.Stat(config.Global.Workspace); err == nil && info.IsDir() {
+		entries, _ := os.ReadDir(config.Global.Workspace)
+		clones := 0
+		for _, e := range entries {
+			if e.IsDir() {
+				clones++
+			}
+		}
+		if clones > 0 {
+			fmt.Printf("  %s⚠️   Workspace has %d existing clone(s) in %s (consider cleaning up)%s\n",
+				ColorYellow, clones, config.Global.Workspace, ColorReset)
+		}
+	}
+
+	// Scanners table
+	fmt.Printf("\n%sScanners:%s\n", ColorBold, ColorReset)
+	fmt.Printf("  %-7s  %-20s %-14s %-50s %-8s %s\n", "STATUS", "NAME", "BINARY", "PATH", "TIMEOUT", "FORMAT")
+	fmt.Printf("  %-7s  %-20s %-14s %-50s %-8s %s\n",
+		strings.Repeat("─", 6), strings.Repeat("─", 18), strings.Repeat("─", 12),
+		strings.Repeat("─", 48), strings.Repeat("─", 7), strings.Repeat("─", 6))
+
 	for _, scanner := range config.Scanners {
+		binaryPath, err := exec.LookPath(scanner.Command)
+		pathStr := binaryPath
+		pathColor := ColorGreen
+
+		var statusStr string
+		if !scanner.Enabled {
+			statusStr = ColorDim + "⛔ OFF" + ColorReset
+		} else if err != nil {
+			statusStr = ColorRed + "❌ ON " + ColorReset
+		} else {
+			statusStr = ColorGreen + "✅ ON " + ColorReset
+		}
+
+		if err != nil {
+			pathStr = "NOT FOUND"
+			pathColor = ColorRed
+			if scanner.Enabled {
+				issues++
+			}
+		}
+
+		format := "JSON"
 		if scanner.Enabled {
-			selectedArgs, isSarif := selectArgs(scanner, config.Global.SarifMode, false)
-			format := "JSON"
-			if isSarif {
+			if _, isSarif := selectArgs(scanner, config.Global.SarifMode, localMode); isSarif {
 				format = "SARIF"
 			}
-			log.Printf("  - %s (timeout: %s, format: %s)", scanner.Name, scanner.Timeout, format)
-			log.Printf("    Command: %s %s", scanner.Command, strings.Join(selectedArgs, " "))
+		}
+
+		timeout := scanner.Timeout
+		if timeout == "" {
+			timeout = "5m"
+		}
+
+		fmt.Printf("  %s  %-20s %-14s %s%-50s%s %-8s %s\n",
+			statusStr, scanner.Name, scanner.Command, pathColor, pathStr, ColorReset, timeout, format)
+	}
+
+	// Repositories table (non-local mode only)
+	if !localMode && len(config.Repositories) > 0 {
+		fmt.Printf("\n%sRepositories (%d):%s\n", ColorBold, len(config.Repositories), ColorReset)
+		fmt.Printf("  %-55s %-20s %s\n", "URL", "REF", "SCANNERS")
+		fmt.Printf("  %-55s %-20s %s\n", strings.Repeat("─", 53), strings.Repeat("─", 18), strings.Repeat("─", 8))
+		for _, repo := range config.Repositories {
+			ref := repo.Branch
+			if repo.Version != "" {
+				ref = repo.Version
+			} else if repo.Commit != "" {
+				ref = repo.Commit
+			}
+			scanners := "all enabled"
+			if len(repo.Scanners) > 0 {
+				scanners = strings.Join(repo.Scanners, ", ")
+			}
+			fmt.Printf("  %-55s %-20s %s\n", repo.URL, ref, scanners)
 		}
 	}
 
-	log.Printf("\nSBOM Generation:")
-	log.Printf("  Tool: syft (CycloneDX JSON)")
-	log.Printf("  Output: %s/sboms/", config.Global.ResultsDir)
-	log.Printf("  Note: Grype will consume SBOM as input (sbom:{{sbom}})")
-
-	log.Printf("\nRepositories:")
-	for _, repo := range config.Repositories {
-		log.Printf("  - %s (branch: %s)", repo.URL, repo.Branch)
-		if len(repo.Scanners) > 0 {
-			log.Printf("    Scanners: %v", repo.Scanners)
-		} else {
-			log.Printf("    Scanners: all enabled")
-		}
+	fmt.Println()
+	if issues > 0 {
+		fmt.Printf("%s⚠️  Preflight found %d issue(s). Resolve before running scans.%s\n\n", ColorYellow, issues, ColorReset)
+		os.Exit(1)
 	}
+	fmt.Printf("%s✅  All checks passed.%s\n\n", ColorGreen, ColorReset)
 }
 
 // cleanupOldResults removes scan result files older than resultsMaxAge

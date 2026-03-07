@@ -71,8 +71,8 @@ For local development and testing:
 # Scan current directory (no cloning or upload)
 nix run -- --local
 
-# Dry run (show what would be executed)
-nix run -- --dry-run
+# Preflight check (validate config and environment without running scans)
+nix run -- --preflight
 
 # Run tests (must run from src/ where go.mod is located)
 cd src && go test ./...
